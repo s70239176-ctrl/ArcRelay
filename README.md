@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ArcRelay
 
 AI Agent Execution Workbench powered by **Circle Agent Stack** and **Arc L1**
@@ -71,3 +72,6 @@ ARCRELAY_SELLER_ADDRESS=0x...   # payee wallet for mock sub-agent nodes
 - Circle Agent Stack — https://developers.circle.com/agent-stack
 - x402 protocol — https://github.com/circlefin/x402
 - Arc L1 testnet explorer — https://arc-testnet.explorer.circle.com/
+=======
+# ArcRelay
+>>>>>>> cf612837d0c4b7b0f350764ce9f4b73df34d89ab
