@@ -55,15 +55,30 @@ ARCRELAY_SELLER_ADDRESS=0x...   # payee wallet for mock sub-agent nodes
 
 ## Architecture
 
-- `app/page.tsx` — main workbench UI, SSE client, settlement tape state.
+- `app/page.tsx` — renders `ArcRelayDashboard`.
+- `components/ArcRelayDashboard.tsx` — dashboard shell: sticky control header
+  with live network telemetry (block height, finality, gateway liquidity,
+  relayer health), responsive two-pane layout, mobile slide-over log drawer,
+  and sticky mobile action bar.
+- `components/x402ExecutionPanel.tsx` — agent archetype selector, prompt
+  input, per-call spend-limit slider, and the live 5-stage execution
+  workflow visualizer (`402 Challenge → Gateway Verification → Signature
+  Generation → Arc L1 Settlement → Delivered`), with settlement toasts.
+- `components/AgentTerminal.tsx` — streaming log terminal with category
+  filters (`All` / `x402` / `Gateway` / `Relayer` / `Errors`), color-coded
+  status badges, and an expandable JSON payload inspector with
+  copy-to-clipboard.
 - `app/api/agent/orchestrate/route.ts` — orchestrator SSE route; plans
-  capability nodes, drives each x402 handshake, streams text + `PAYMENT_EVENT`
-  chunks.
+  capability nodes, drives each x402 handshake, and streams `text`, `step`
+  (workflow stage), `log` (structured terminal entries), `payment`, and
+  `summary` events.
 - `app/api/v1/mock-nodes/[nodeId]/route.ts` — sub-agent endpoints implementing
   the HTTP 402 challenge/response cycle (`withGateway`-wrapped for Circle
   Gateway off-chain batch settlement).
 - `lib/circle-agent-wallet.ts` — Agent Wallet init, USDC balance reads, and
   x402 payload signing (mock + live paths).
+- `lib/agent-types.ts` — shared types for log entries, execution stages, and
+  agent archetypes used by both the API route and the UI components.
 
 ## References
 

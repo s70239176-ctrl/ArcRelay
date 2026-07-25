@@ -17,8 +17,17 @@ import {
   signX402Payment,
   type X402PaymentRequirements,
 } from "@/lib/circle-agent-wallet";
+import type { ExecutionStage, LogEntry } from "@/lib/agent-types";
 
 export const runtime = "nodejs";
+
+function makeLog(partial: Omit<LogEntry, "id" | "timestamp">): LogEntry {
+  return {
+    ...partial,
+    id: `${partial.nodeLabel}-${Math.random().toString(36).slice(2, 9)}`,
+    timestamp: new Date().toISOString(),
+  };
+}
 
 interface PlannedNode {
   nodeId: string;
@@ -102,6 +111,9 @@ export async function POST(req: NextRequest) {
 
         let sessionSpend = 0;
 
+        const emitStage = (stage: ExecutionStage, nodeId: string) =>
+          push(sse("step", { stage, nodeId, timestamp: new Date().toISOString() }));
+
         for (const step of plan) {
           push(sse("text", `\n> Dispatching job to ${step.nodeId} (${step.reason})...`));
 
@@ -112,8 +124,22 @@ export async function POST(req: NextRequest) {
 
           if (challengeRes.status !== 402) {
             push(sse("text", `\n! Unexpected response from ${step.nodeId}: ${challengeRes.status}`));
+            push(
+              sse(
+                "log",
+                makeLog({
+                  category: "error",
+                  status: "ERROR",
+                  nodeLabel: step.nodeId,
+                  message: `Unexpected response (${challengeRes.status})`,
+                  payload: { nodeId: step.nodeId, httpStatus: challengeRes.status },
+                })
+              )
+            );
             continue;
           }
+
+          emitStage("challenge_received", step.nodeId);
 
           const challenge = (await challengeRes.json()) as {
             accepts: X402PaymentRequirements[];
@@ -128,12 +154,42 @@ export async function POST(req: NextRequest) {
               ).toFixed(4)} USDC`
             )
           );
+          push(
+            sse(
+              "log",
+              makeLog({
+                category: "x402",
+                status: "402_CHALLENGE",
+                nodeLabel: step.nodeId,
+                message: `${requirements.description} quoted at $${(
+                  Number(requirements.maxAmountRequired) / 1_000_000
+                ).toFixed(4)} USDC`,
+                payload: requirements as unknown as Record<string, unknown>,
+              })
+            )
+          );
+
+          emitStage("gateway_verification", step.nodeId);
+          push(
+            sse(
+              "log",
+              makeLog({
+                category: "gateway",
+                status: "GATEWAY_BATCHED",
+                nodeLabel: step.nodeId,
+                message: "Circle Gateway verified off-chain deposit balance covers this call",
+                payload: { nodeId: step.nodeId, resource: requirements.resource },
+              })
+            )
+          );
 
           // 2) Sign x402 authorization with the Agent Wallet
+          emitStage("signature_generation", step.nodeId);
           const authorization = await signX402Payment(wallet, requirements);
           push(sse("text", `\n> Signed x402 authorization (nonce ${authorization.payload.authorization.nonce.slice(0, 10)}…)`));
 
           // 3) Re-send with X-PAYMENT header
+          emitStage("settlement", step.nodeId);
           const fulfilRes = await fetch(endpoint, {
             method: "POST",
             headers: { "X-PAYMENT": JSON.stringify(authorization) },
@@ -141,6 +197,18 @@ export async function POST(req: NextRequest) {
 
           if (!fulfilRes.ok) {
             push(sse("text", `\n! Payment/fulfilment failed for ${step.nodeId}: ${fulfilRes.status}`));
+            push(
+              sse(
+                "log",
+                makeLog({
+                  category: "error",
+                  status: "ERROR",
+                  nodeLabel: step.nodeId,
+                  message: `Payment/fulfilment failed (${fulfilRes.status})`,
+                  payload: { nodeId: step.nodeId, httpStatus: fulfilRes.status },
+                })
+              )
+            );
             continue;
           }
 
@@ -155,6 +223,37 @@ export async function POST(req: NextRequest) {
           sessionSpend += result.payment.amountUsdc;
 
           push(sse("text", `\n< ${result.label} → ${result.result}`));
+
+          push(
+            sse("log", {
+              ...makeLog({
+                category: "relayer",
+                status: "RELAY_SUBMITTED",
+                nodeLabel: result.label,
+                message: `Settled $${result.payment.amountUsdc.toFixed(4)} USDC on Arc L1 in ${result.latencyMs}ms`,
+                payload: {
+                  authorization: authorization.payload.authorization,
+                  signature: authorization.payload.signature,
+                  txHash: result.payment.txHash,
+                  chain: result.payment.chain,
+                },
+              }),
+            })
+          );
+
+          emitStage("delivered", step.nodeId);
+          push(
+            sse(
+              "log",
+              makeLog({
+                category: "relayer",
+                status: "200_OK",
+                nodeLabel: result.label,
+                message: result.result,
+                payload: { nodeId: step.nodeId, result: result.result, latencyMs: result.latencyMs },
+              })
+            )
+          );
 
           push(
             sse("payment", {
