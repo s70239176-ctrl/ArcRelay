@@ -39,19 +39,33 @@ npm run dev
 
 ## Going live
 
-Edit `.env.local` (or Codespaces → **Settings → Secrets**) with real Circle
-Developer-Controlled Wallets credentials for Arc L1 testnet:
+ArcRelay's live mode uses Circle's real `@circle-fin/x402-batching` SDK end
+to end — a real `GatewayClient` on the buyer (orchestrator) side and a real
+`x402ResourceServer` + `BatchFacilitatorClient` on the seller (sub-agent
+node) side, settling genuine nanopayments via Circle Gateway on Arc L1
+testnet.
 
-```bash
-ARCRELAY_FORCE_MOCK=0
-CIRCLE_API_KEY=...
-CIRCLE_ENTITY_SECRET=...
-ARC_USDC_ADDRESS=0x...          # USDC contract address on Arc L1
-ARCRELAY_SELLER_ADDRESS=0x...   # payee wallet for mock sub-agent nodes
-```
+1. Get an EVM private key and fund it with testnet USDC from
+   https://faucet.circle.com.
+2. Deposit that USDC into the Gateway Wallet (one time):
+   ```ts
+   import { GatewayClient } from "@circle-fin/x402-batching/client";
+   const client = new GatewayClient({ chain: "arcTestnet", privateKey: "0x..." });
+   await client.deposit("5.00");
+   ```
+3. Set these in `.env.local` (or Codespaces → **Settings → Secrets**):
+   ```bash
+   ARCRELAY_FORCE_MOCK=0
+   ARCRELAY_PRIVATE_KEY=0x...          # the funded/deposited key from step 1-2
+   ARCRELAY_SELLER_ADDRESS=0x...       # payee wallet for the sub-agent nodes
+   ```
 
-`lib/circle-agent-wallet.ts` auto-detects credentials and switches from
-`mock` to `live` mode with no other code changes.
+`lib/circle-agent-wallet.ts` auto-detects `ARCRELAY_PRIVATE_KEY` and
+switches from `mock` to `live` mode with no other code changes — the
+orchestrator then calls the real `GatewayClient.pay()` against each node,
+and `app/api/v1/mock-nodes/[nodeId]/route.ts` verifies/settles those
+payments through Circle Gateway's testnet API
+(`gateway-api-testnet.circle.com`) via `lib/x402-server.ts`.
 
 ## Architecture
 
