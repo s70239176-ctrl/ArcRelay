@@ -67,6 +67,23 @@ and `app/api/v1/mock-nodes/[nodeId]/route.ts` verifies/settles those
 payments through Circle Gateway's testnet API
 (`gateway-api-testnet.circle.com`) via `lib/x402-server.ts`.
 
+## Design system
+
+The UI is built to [`DESIGN.md`](./DESIGN.md) — a warm-canvas editorial
+system (cream canvas, coral primary CTA, dark-navy product surfaces,
+slab-serif display type). Tokens are wired as CSS custom properties in
+`app/globals.css` and exposed as Tailwind theme colors/radii in
+`tailwind.config.ts` (`bg-canvas`, `text-primary`, `bg-surface-dark`, etc.).
+The relayer log terminal is treated as the system's `code-window-card` — a
+dark product surface — while the rest of the console stays on the cream
+canvas, with coral reserved for the single "Execute Agent" primary action.
+
+Display/body fonts use DESIGN.md's own documented open-source substitutes
+(Cormorant Garamond / EB Garamond for the licensed Copernicus serif, Inter
+for the licensed StyreneB sans) as local CSS stacks rather than a
+`next/font/google` fetch, so the app builds and renders correctly without
+network access to a font CDN.
+
 ## Architecture
 
 - `app/page.tsx` — renders `ArcRelayDashboard`.

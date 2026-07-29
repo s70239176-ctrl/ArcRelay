@@ -3,11 +3,12 @@
 /**
  * components/x402ExecutionPanel.tsx
  *
- * Interactive execution card for the Agent Execution Console. Lets the
- * operator pick an agent archetype, set a per-call spend ceiling, and
- * trigger a live x402 nanopayment run. Drives the orchestrator SSE route,
- * surfaces a step-by-step execution workflow visualizer, and reports
- * structured log/payment/telemetry events up to the dashboard shell.
+ * The Agent Execution Console, restyled as a cream `feature-card`. The
+ * archetype picker uses the `category-tab` pattern (transparent → muted
+ * text, active → surface-cream-strong background), the prompt field is a
+ * `text-input`, and "Execute Agent" is the panel's one `button-primary` —
+ * coral is spent here and nowhere else in the console, per DESIGN.md's
+ * "coral is scarce on individual elements" rule.
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -149,13 +150,8 @@ export default function X402ExecutionPanel({
   }, [isRunning, prompt, spendLimit, onLog, onPayment, onSummary, pushToast]);
 
   return (
-    <div
-      className={cn(
-        "relative rounded-lg border border-[#1F2232] bg-[#0D0E15] p-3 sm:p-4",
-        className
-      )}
-    >
-      {/* Settlement toasts */}
+    <div className={cn("relative rounded-lg bg-surface-card p-4 sm:p-5", className)}>
+      {/* Settlement toasts — cream card, success accent, no coral (reserved for the CTA) */}
       <div className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col gap-2">
         <AnimatePresence>
           {toasts.map((t) => (
@@ -165,14 +161,12 @@ export default function X402ExecutionPanel({
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
-              className="pointer-events-auto flex items-center gap-2 rounded-md border border-[#10B981]/40 bg-[#10B981]/10 px-3 py-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+              className="pointer-events-auto flex items-center gap-2 rounded-md border border-hairline bg-canvas px-3 py-2 shadow-[0_1px_3px_rgba(20,20,19,0.12)]"
             >
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-[#10B981]" />
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
               <div className="font-mono text-[11px] leading-tight">
-                <div className="text-[#6ee7b7]">
-                  Settled ${t.amountUsdc.toFixed(4)} USDC
-                </div>
-                <div className="text-slate-500">
+                <div className="text-body-strong">Settled ${t.amountUsdc.toFixed(4)} USDC</div>
+                <div className="text-muted">
                   {t.txHash.slice(0, 8)}...{t.txHash.slice(-6)}
                 </div>
               </div>
@@ -182,14 +176,14 @@ export default function X402ExecutionPanel({
       </div>
 
       <div className="mb-3 flex items-center gap-2">
-        <Sliders className="h-4 w-4 text-[#00F0FF]" />
-        <h2 className="font-mono text-sm font-medium text-slate-200">
+        <Sliders className="h-4 w-4 text-primary" />
+        <h2 className="font-display text-lg font-normal tracking-display-sm text-ink">
           x402 Execution Panel
         </h2>
       </div>
 
-      {/* Archetype selector */}
-      <label className="mb-1 block text-[11px] font-mono uppercase tracking-wider text-slate-500">
+      {/* Archetype selector — category-tab pattern */}
+      <label className="mb-1.5 block text-[11px] font-sans font-medium uppercase tracking-caption text-muted">
         Agent Archetype
       </label>
       <div className="mb-3 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
@@ -199,10 +193,10 @@ export default function X402ExecutionPanel({
             onClick={() => handleArchetypeChange(key)}
             disabled={isRunning}
             className={cn(
-              "min-h-[44px] rounded-md border px-2.5 py-1.5 text-left text-[11px] font-medium transition-colors disabled:opacity-40",
+              "min-h-[44px] rounded-md px-2.5 py-1.5 text-left text-[12px] font-sans font-medium transition-colors disabled:opacity-40",
               archetype === key
-                ? "border-[#8B5CF6]/50 bg-[#8B5CF6]/10 text-[#c4b5fd]"
-                : "border-[#1F2232] text-slate-400 hover:border-[#1F2232]/80 hover:text-slate-200"
+                ? "bg-surface-cream-strong text-ink"
+                : "text-muted hover:text-body-strong"
             )}
           >
             {AGENT_ARCHETYPES[key].label}
@@ -210,22 +204,22 @@ export default function X402ExecutionPanel({
         ))}
       </div>
 
-      {/* Prompt */}
+      {/* Prompt — text-input */}
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         rows={2}
         disabled={isRunning}
-        className="mb-3 w-full resize-none rounded-md border border-[#1F2232] bg-[#07080C] p-2.5 font-mono text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-[#00F0FF]/30 disabled:opacity-60"
+        className="mb-3 w-full resize-none rounded-md border border-hairline bg-canvas p-3 font-mono text-[13px] text-ink placeholder:text-muted-soft focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/50 disabled:opacity-60"
       />
 
       {/* Spend limit slider */}
       <div className="mb-4">
-        <div className="mb-1.5 flex items-center justify-between text-[11px] font-mono">
-          <span className="uppercase tracking-wider text-slate-500">
+        <div className="mb-1.5 flex items-center justify-between text-[11px] font-sans">
+          <span className="font-medium uppercase tracking-caption text-muted">
             Per-Call Spend Limit
           </span>
-          <span className="text-[#00F0FF]">${spendLimit.toFixed(4)} USDC</span>
+          <span className="font-mono text-primary">${spendLimit.toFixed(4)} USDC</span>
         </div>
         <input
           type="range"
@@ -235,9 +229,9 @@ export default function X402ExecutionPanel({
           value={spendLimit}
           onChange={(e) => setSpendLimit(Number(e.target.value))}
           disabled={isRunning}
-          className="h-2 w-full min-h-[44px] cursor-pointer appearance-none rounded-full bg-[#1F2232] accent-[#00F0FF] disabled:opacity-50"
+          className="h-2 w-full min-h-[44px] cursor-pointer appearance-none rounded-pill bg-hairline accent-primary disabled:opacity-50"
         />
-        <div className="mt-1 flex justify-between font-mono text-[10px] text-slate-600">
+        <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-soft">
           <span>$0.0001</span>
           <span>$1.00</span>
         </div>
@@ -248,10 +242,6 @@ export default function X402ExecutionPanel({
         {EXECUTION_STAGES.map((stage, idx) => {
           const isActive = activeStage === stage.key;
           const stageIdx = EXECUTION_STAGES.findIndex((s) => s.key === activeStage);
-          const isDone =
-            !isRunning && completedNodes.length > 0
-              ? true
-              : stageIdx > idx || (stageIdx === idx && !isActive);
           const isPast = stageIdx > idx;
 
           return (
@@ -259,21 +249,17 @@ export default function X402ExecutionPanel({
               key={stage.key}
               className={cn(
                 "flex items-center gap-2 rounded-md border px-2.5 py-1.5 transition-colors",
-                isActive
-                  ? "border-[#00F0FF]/40 bg-[#00F0FF]/5"
-                  : isPast
-                  ? "border-[#1F2232] bg-transparent"
-                  : "border-[#1F2232]/60 bg-transparent"
+                isActive ? "border-primary/40 bg-primary/5" : "border-hairline-soft bg-transparent"
               )}
             >
               <span
                 className={cn(
                   "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10px]",
                   isActive
-                    ? "border-[#00F0FF] text-[#00F0FF]"
+                    ? "border-primary text-primary"
                     : isPast
-                    ? "border-[#10B981] bg-[#10B981]/10 text-[#10B981]"
-                    : "border-[#1F2232] text-slate-600"
+                    ? "border-success bg-success/10 text-success"
+                    : "border-hairline text-muted-soft"
                 )}
               >
                 {isActive ? (
@@ -286,16 +272,14 @@ export default function X402ExecutionPanel({
               </span>
               <span
                 className={cn(
-                  "font-mono text-[11px]",
-                  isActive ? "text-[#67e8f9]" : isPast ? "text-slate-400" : "text-slate-600"
+                  "font-sans text-[12px]",
+                  isActive ? "text-body-strong font-medium" : isPast ? "text-body" : "text-muted-soft"
                 )}
               >
                 {stage.label}
               </span>
               {isActive && activeNode && (
-                <span className="ml-auto font-mono text-[10px] text-slate-500 truncate">
-                  {activeNode}
-                </span>
+                <span className="ml-auto font-mono text-[10px] text-muted truncate">{activeNode}</span>
               )}
             </div>
           );
@@ -303,7 +287,7 @@ export default function X402ExecutionPanel({
       </div>
 
       {runError && (
-        <div className="mb-3 flex items-center gap-2 rounded-md border border-red-500/40 bg-red-500/10 px-2.5 py-2 text-[11px] font-mono text-red-300">
+        <div className="mb-3 flex items-center gap-2 rounded-md border border-error/30 bg-error/10 px-2.5 py-2 text-[12px] font-sans text-error">
           <XCircle className="h-3.5 w-3.5 shrink-0" />
           {runError}
         </div>
@@ -312,7 +296,7 @@ export default function X402ExecutionPanel({
       <button
         onClick={execute}
         disabled={isRunning || !prompt.trim()}
-        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-[#00F0FF] font-mono text-sm font-semibold text-[#07080C] shadow-[0_0_15px_rgba(0,240,255,0.25)] transition-opacity hover:opacity-90 disabled:opacity-40"
+        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary font-sans text-sm font-medium text-on-primary transition-colors hover:bg-primary-active disabled:bg-primary-disabled disabled:text-muted disabled:cursor-not-allowed"
       >
         {isRunning ? (
           <>
