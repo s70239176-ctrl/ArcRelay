@@ -3,24 +3,26 @@
  *
  * A sub-agent capability node (e.g. `sec_data_node`, `sentiment_node`,
  * `solidity_audit_node`). Each node is gated behind Circle's x402
- * micropayment protocol: the first request without a valid payment header
- * is rejected with `HTTP 402 Payment Required` and a JSON body describing
- * the price; a follow-up request carrying a signed `X-PAYMENT` header is
- * fulfilled and (via `withGateway`) queued for Circle Gateway's off-chain
- * batched settlement to Arc L1.
+ * micropayment protocol.
  *
- * Reference: https://github.com/circlefin/x402
+ * - **Live mode** (`ARCRELAY_PRIVATE_KEY` set): requests are processed by a
+ *   real `x402HTTPResourceServer` backed by Circle's `BatchFacilitatorClient`
+ *   (see `lib/x402-server.ts`) — genuine HTTP 402 challenges, genuine
+ *   verify/settle calls to Circle Gateway's testnet API, genuine Arc L1
+ *   settlement transaction hashes.
+ * - **Mock mode** (default): a self-contained 402 challenge/response cycle
+ *   with a synthesized signature and tx hash — no network calls to Circle,
+ *   so the whole pipeline runs offline with zero setup.
+ *
+ * Reference: https://www.npmjs.com/package/@circle-fin/x402-batching
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  buildPaymentRequirements,
-  mockSettlementTxHash,
-  type X402PaymentAuthorization,
-} from "@/lib/circle-agent-wallet";
+import { WALLET_MODE, mockSettlementTxHash } from "@/lib/circle-agent-wallet";
+import { createGatewayHttpServer, buildRequestContext } from "@/lib/x402-server";
 
 // ---------------------------------------------------------------------------
-// Node registry — capability metadata for each mock sub-agent.
+// Node registry — capability metadata for each sub-agent.
 // ---------------------------------------------------------------------------
 
 const NODE_REGISTRY: Record<
@@ -65,55 +67,155 @@ function randomLatency([min, max]: [number, number]) {
   return Math.round(min + Math.random() * (max - min));
 }
 
-// Wraps a handler with Circle's x402-batching Gateway helper, which queues
-// a verified authorization for off-chain aggregation into a single Arc L1
-// settlement transaction rather than broadcasting one tx per micropayment.
-// (Mirrors `@circle-fin/x402-batching`'s `withGateway` wrapper contract.)
-function withGateway<T>(
-  handler: (req: NextRequest, ctx: { nodeId: string }) => Promise<T>
-) {
-  return async (req: NextRequest, ctx: { params: Promise<{ nodeId: string }> }) => {
-    const { nodeId } = await ctx.params;
-    return handler(req, { nodeId });
-  };
+function mockResultFor(nodeId: string): string {
+  switch (nodeId) {
+    case "sec_data_node":
+      return "Retrieved latest 10-K risk-factor deltas: 3 new items flagged under liquidity risk.";
+    case "sentiment_node":
+      return "Aggregate sentiment score: +0.62 (bullish lean across 1,204 sampled sources).";
+    case "solidity_audit_node":
+      return "Static audit complete: 1 medium-severity reentrancy pattern, 2 informational findings.";
+    case "liquidity_router_node":
+      return "Optimal route found across 3 pools; estimated slippage 0.04%.";
+    default:
+      return "Job complete.";
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
-export const POST = withGateway(async (req, { nodeId }) => {
+export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ nodeId: string }> }
+) {
+  const { nodeId } = await ctx.params;
   const node = NODE_REGISTRY[nodeId];
 
   if (!node) {
-    return NextResponse.json(
-      { error: `Unknown capability node: "${nodeId}"` },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: `Unknown capability node: "${nodeId}"` }, { status: 404 });
   }
 
-  const paymentHeader = req.headers.get("x-payment");
-  const requirements = buildPaymentRequirements({
-    amountUsdc: node.priceUsdc,
+  return WALLET_MODE === "live"
+    ? handleLive(req, nodeId, node)
+    : handleMock(req, nodeId, node);
+}
+
+// ---------------------------------------------------------------------------
+// Live: real x402 + Circle Gateway settlement
+// ---------------------------------------------------------------------------
+
+async function handleLive(
+  req: NextRequest,
+  nodeId: string,
+  node: (typeof NODE_REGISTRY)[string]
+) {
+  const httpServer = await createGatewayHttpServer({
     resource: `/api/v1/mock-nodes/${nodeId}`,
     description: node.capability,
+    priceUsdc: node.priceUsdc,
     payTo: SELLER_ADDRESS,
   });
 
-  // --- Step 1: no payment attached -> challenge with HTTP 402 --------------
+  const context = buildRequestContext(req);
+  const result = await httpServer.processHTTPRequest(context);
+
+  if (result.type === "no-payment-required") {
+    // Every route on this server requires payment; this branch is
+    // unreachable in practice but handled defensively.
+    return NextResponse.json({ error: "No payment required (unexpected)." }, { status: 500 });
+  }
+
+  if (result.type === "payment-error") {
+    return NextResponse.json(result.response.body, {
+      status: result.response.status,
+      headers: result.response.headers,
+    });
+  }
+
+  // `result.type === "payment-verified"` — do the actual work, then settle.
+  const latency = randomLatency(node.latencyMs);
+  await sleep(latency);
+
+  const settlement = await httpServer.processSettlement(
+    result.paymentPayload,
+    result.paymentRequirements
+  );
+
+  if (!settlement.success) {
+    return NextResponse.json(
+      { error: settlement.errorReason ?? "Settlement failed." },
+      { status: 402, headers: settlement.headers }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      nodeId,
+      label: node.label,
+      capability: node.capability,
+      result: mockResultFor(nodeId),
+      payment: {
+        amountUsdc: node.priceUsdc,
+        settlement: "circle-gateway-batched",
+        chain: "ARC-TESTNET",
+        txHash: settlement.transaction,
+      },
+      latencyMs: latency,
+    },
+    { headers: settlement.headers }
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mock: self-contained 402 handshake, no network calls to Circle
+// ---------------------------------------------------------------------------
+
+interface MockPaymentRequirements {
+  scheme: "exact";
+  network: "arc-testnet";
+  maxAmountRequired: string;
+  resource: string;
+  description: string;
+  payTo: `0x${string}`;
+  asset: `0x${string}`;
+}
+
+const MOCK_ASSET: `0x${string}` = "0x3600000000000000000000000000000000000000";
+
+function toAtomicUsdc(amount: number): string {
+  return Math.round(amount * 1_000_000).toString();
+}
+
+async function handleMock(
+  req: NextRequest,
+  nodeId: string,
+  node: (typeof NODE_REGISTRY)[string]
+) {
+  const paymentHeader = req.headers.get("x-payment");
+  const requirements: MockPaymentRequirements = {
+    scheme: "exact",
+    network: "arc-testnet",
+    maxAmountRequired: toAtomicUsdc(node.priceUsdc),
+    resource: `/api/v1/mock-nodes/${nodeId}`,
+    description: node.capability,
+    payTo: SELLER_ADDRESS,
+    asset: MOCK_ASSET,
+  };
+
+  // --- Step 1: no payment attached -> challenge with HTTP 402 -------------
   if (!paymentHeader) {
     return NextResponse.json(
-      {
-        x402Version: 1,
-        error: "Payment Required",
-        accepts: [requirements],
-      },
+      { x402Version: 1, error: "Payment Required", accepts: [requirements] },
       { status: 402 }
     );
   }
 
-  // --- Step 2: verify the attached x402 authorization -----------------------
-  let authorization: X402PaymentAuthorization;
+  // --- Step 2: verify the attached x402 authorization ----------------------
+  let authorization: {
+    payload: { authorization: { to: string; value: string; nonce: string }; signature: string };
+  };
   try {
     authorization = JSON.parse(paymentHeader);
   } catch {
@@ -131,15 +233,12 @@ export const POST = withGateway(async (req, { nodeId }) => {
 
   if (!validPayload) {
     return NextResponse.json(
-      {
-        error: "Payment verification failed: amount or payee mismatch.",
-        accepts: [requirements],
-      },
+      { error: "Payment verification failed: amount or payee mismatch.", accepts: [requirements] },
       { status: 402 }
     );
   }
 
-  // --- Step 3: fulfil the job, queue settlement for Gateway batching --------
+  // --- Step 3: fulfil the job, synthesize a settlement tx hash -------------
   const latency = randomLatency(node.latencyMs);
   await sleep(latency);
 
@@ -152,25 +251,10 @@ export const POST = withGateway(async (req, { nodeId }) => {
     result: mockResultFor(nodeId),
     payment: {
       amountUsdc: node.priceUsdc,
-      settlement: "batched-off-chain-gateway",
+      settlement: "mock-local",
       chain: "ARC-TESTNET",
       txHash,
     },
     latencyMs: latency,
   });
-});
-
-function mockResultFor(nodeId: string): string {
-  switch (nodeId) {
-    case "sec_data_node":
-      return "Retrieved latest 10-K risk-factor deltas: 3 new items flagged under liquidity risk.";
-    case "sentiment_node":
-      return "Aggregate sentiment score: +0.62 (bullish lean across 1,204 sampled sources).";
-    case "solidity_audit_node":
-      return "Static audit complete: 1 medium-severity reentrancy pattern, 2 informational findings.";
-    case "liquidity_router_node":
-      return "Optimal route found across 3 pools; estimated slippage 0.04%.";
-    default:
-      return "Job complete.";
-  }
 }

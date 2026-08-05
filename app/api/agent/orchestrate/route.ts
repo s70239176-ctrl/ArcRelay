@@ -2,27 +2,40 @@
  * app/api/agent/orchestrate/route.ts
  *
  * Orchestrator Agent SSE endpoint. Given a user prompt, determines which
- * capability nodes are needed, performs the x402 402-challenge -> signed
- * authorization -> fulfilment handshake against each one via
- * `app/api/v1/mock-nodes/[nodeId]`, and streams the whole run to the client
- * as Server-Sent Events: interleaved narration text chunks and structured
- * `PAYMENT_EVENT: {...}` lines the frontend parses into settlement-tape
- * entries.
+ * capability nodes are needed and pays each one via `payResource()` — which
+ * delegates to Circle's real `GatewayClient.pay()` in live mode, or a local
+ * mock 402 handshake otherwise (see `lib/circle-agent-wallet.ts`). Streams
+ * the whole run to the client as Server-Sent Events: narration text,
+ * `step` execution-stage events, `log` terminal entries, and `payment`
+ * events the frontend renders into the settlement tape.
  */
 
 import { NextRequest } from "next/server";
-import {
-  getOrCreateAgentWallet,
-  getUsdcBalance,
-  signX402Payment,
-  type X402PaymentRequirements,
-} from "@/lib/circle-agent-wallet";
+import { getOrCreateAgentWallet, getUsdcBalance, payResource } from "@/lib/circle-agent-wallet";
+import type { ExecutionStage, LogEntry } from "@/lib/agent-types";
 
 export const runtime = "nodejs";
+
+function makeLog(partial: Omit<LogEntry, "id" | "timestamp">): LogEntry {
+  return {
+    ...partial,
+    id: `${partial.nodeLabel}-${Math.random().toString(36).slice(2, 9)}`,
+    timestamp: new Date().toISOString(),
+  };
+}
 
 interface PlannedNode {
   nodeId: string;
   reason: string;
+}
+
+interface NodeResultBody {
+  nodeId: string;
+  label: string;
+  capability: string;
+  result: string;
+  payment: { amountUsdc: number; settlement: string; chain: string; txHash: string };
+  latencyMs: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +62,6 @@ function planNodes(prompt: string): PlannedNode[] {
   }
 
   if (plan.length === 0) {
-    // Fallback default plan so any prompt still demonstrates the full flow.
     plan.push(
       { nodeId: "sec_data_node", reason: "default market-context enrichment" },
       { nodeId: "sentiment_node", reason: "default sentiment enrichment" }
@@ -58,6 +70,14 @@ function planNodes(prompt: string): PlannedNode[] {
 
   return plan;
 }
+
+const STAGE_LABEL: Record<ExecutionStage, string> = {
+  challenge_received: "402 Payment Required challenge received",
+  gateway_verification: "Circle Gateway verifying deposit balance",
+  signature_generation: "Signing x402 payment authorization",
+  settlement: "Settling on Arc L1 via Circle Gateway",
+  delivered: "Payload delivered",
+};
 
 function sse(event: string, data: unknown) {
   return `event: ${event}\ndata: ${typeof data === "string" ? data : JSON.stringify(data)}\n\n`;
@@ -83,12 +103,7 @@ export async function POST(req: NextRequest) {
       try {
         const wallet = await getOrCreateAgentWallet();
         push(sse("text", `Orchestrator received prompt: "${prompt.trim()}"\n`));
-        push(
-          sse(
-            "text",
-            `Agent Wallet ready — ${wallet.address} on Arc L1 (${wallet.mode} mode)\n`
-          )
-        );
+        push(sse("text", `Agent Wallet ready — ${wallet.address} on Arc L1 (${wallet.mode} mode)\n`));
 
         const plan = planNodes(prompt);
         push(
@@ -104,77 +119,92 @@ export async function POST(req: NextRequest) {
 
         for (const step of plan) {
           push(sse("text", `\n> Dispatching job to ${step.nodeId} (${step.reason})...`));
-
           const endpoint = `${origin}/api/v1/mock-nodes/${step.nodeId}`;
 
-          // 1) Initial request without payment -> expect HTTP 402
-          const challengeRes = await fetch(endpoint, { method: "POST" });
+          try {
+            const paid = await payResource(wallet, endpoint, {
+              method: "POST",
+              onStage: (stage) => {
+                push(sse("step", { stage, nodeId: step.nodeId, timestamp: new Date().toISOString() }));
+                push(
+                  sse(
+                    "log",
+                    makeLog({
+                      category: stage === "settlement" || stage === "delivered" ? "relayer" : "x402",
+                      status:
+                        stage === "challenge_received"
+                          ? "402_CHALLENGE"
+                          : stage === "gateway_verification"
+                          ? "GATEWAY_BATCHED"
+                          : stage === "settlement"
+                          ? "RELAY_SUBMITTED"
+                          : stage === "delivered"
+                          ? "200_OK"
+                          : "402_CHALLENGE",
+                      nodeLabel: step.nodeId,
+                      message: STAGE_LABEL[stage],
+                      payload: { nodeId: step.nodeId, stage },
+                    })
+                  )
+                );
+              },
+            });
 
-          if (challengeRes.status !== 402) {
-            push(sse("text", `\n! Unexpected response from ${step.nodeId}: ${challengeRes.status}`));
-            continue;
+            const body = paid.data as NodeResultBody;
+            sessionSpend += paid.amountUsdc;
+
+            push(sse("text", `\n< ${body.label} → ${body.result}`));
+            push(
+              sse(
+                "log",
+                makeLog({
+                  category: "relayer",
+                  status: "RELAY_SUBMITTED",
+                  nodeLabel: body.label,
+                  message: `Settled $${paid.amountUsdc.toFixed(4)} USDC on Arc L1 (${paid.settlement}) — ${paid.txHash.slice(0, 10)}…`,
+                  payload: { txHash: paid.txHash, chain: paid.chain, settlement: paid.settlement },
+                })
+              )
+            );
+
+            push(
+              sse("payment", {
+                type: "PAYMENT_EVENT",
+                nodeId: step.nodeId,
+                label: body.label,
+                capability: body.capability,
+                amountUsdc: paid.amountUsdc,
+                chain: paid.chain,
+                txHash: paid.txHash,
+                latencyMs: body.latencyMs,
+                timestamp: new Date().toISOString(),
+              })
+            );
+          } catch (nodeErr) {
+            const message = nodeErr instanceof Error ? nodeErr.message : "Unknown node error.";
+            push(sse("text", `\n! ${step.nodeId} failed: ${message}`));
+            push(
+              sse(
+                "log",
+                makeLog({
+                  category: "error",
+                  status: "ERROR",
+                  nodeLabel: step.nodeId,
+                  message,
+                  payload: { nodeId: step.nodeId },
+                })
+              )
+            );
           }
-
-          const challenge = (await challengeRes.json()) as {
-            accepts: X402PaymentRequirements[];
-          };
-          const requirements = challenge.accepts[0];
-
-          push(
-            sse(
-              "text",
-              `\n< 402 Payment Required — ${requirements.description} for $${(
-                Number(requirements.maxAmountRequired) / 1_000_000
-              ).toFixed(4)} USDC`
-            )
-          );
-
-          // 2) Sign x402 authorization with the Agent Wallet
-          const authorization = await signX402Payment(wallet, requirements);
-          push(sse("text", `\n> Signed x402 authorization (nonce ${authorization.payload.authorization.nonce.slice(0, 10)}…)`));
-
-          // 3) Re-send with X-PAYMENT header
-          const fulfilRes = await fetch(endpoint, {
-            method: "POST",
-            headers: { "X-PAYMENT": JSON.stringify(authorization) },
-          });
-
-          if (!fulfilRes.ok) {
-            push(sse("text", `\n! Payment/fulfilment failed for ${step.nodeId}: ${fulfilRes.status}`));
-            continue;
-          }
-
-          const result = (await fulfilRes.json()) as {
-            label: string;
-            capability: string;
-            result: string;
-            payment: { amountUsdc: number; chain: string; txHash: string };
-            latencyMs: number;
-          };
-
-          sessionSpend += result.payment.amountUsdc;
-
-          push(sse("text", `\n< ${result.label} → ${result.result}`));
-
-          push(
-            sse("payment", {
-              type: "PAYMENT_EVENT",
-              nodeId: step.nodeId,
-              label: result.label,
-              capability: result.capability,
-              amountUsdc: result.payment.amountUsdc,
-              chain: result.payment.chain,
-              txHash: result.payment.txHash,
-              latencyMs: result.latencyMs,
-              timestamp: new Date().toISOString(),
-            })
-          );
         }
 
         const balance = await getUsdcBalance(wallet, { sessionSpend });
 
         push(
-          sse("text", `\n\nSession complete. Total spend: $${sessionSpend.toFixed(4)} USDC. Remaining balance: ${balance.formatted} USDC.`)
+          sse(
+            "text",
+            `\n\nSession complete. Total spend: $${sessionSpend.toFixed(4)} USDC. Remaining balance: ${balance.formatted} USDC.`
+          )
         );
         push(
           sse("summary", {
@@ -186,9 +216,7 @@ export async function POST(req: NextRequest) {
         );
         push(sse("done", { ok: true }));
       } catch (err) {
-        push(
-          sse("text", `\n! Orchestrator error: ${err instanceof Error ? err.message : "unknown error"}`)
-        );
+        push(sse("text", `\n! Orchestrator error: ${err instanceof Error ? err.message : "unknown error"}`));
         push(sse("done", { ok: false }));
       } finally {
         controller.close();
