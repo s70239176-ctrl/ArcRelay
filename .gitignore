@@ -5,6 +5,9 @@ node_modules/
 .next/
 out/
 
+# build output (packages/sdk, examples/agent-adapters/*)
+dist/
+
 # env
 .env
 .env.local

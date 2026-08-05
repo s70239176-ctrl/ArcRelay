@@ -1,0 +1,26 @@
+{
+  "name": "@arcrelay/langchain-adapter",
+  "version": "0.1.0",
+  "description": "LangChain tool letting an agent autonomously pay for x402-protected resources via @arcrelay/sdk.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "example": "tsx src/example.ts"
+  },
+  "dependencies": {
+    "@arcrelay/sdk": "file:../../../packages/sdk",
+    "@langchain/core": "^0.3.30",
+    "express": "^4.21.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@langchain/openai": "^0.3.17",
+    "@types/express": "^4.17.21",
+    "langchain": "^0.3.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.0",
+    "@types/node": "^22.5.0"
+  }
+}

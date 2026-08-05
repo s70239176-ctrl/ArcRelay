@@ -6,6 +6,19 @@ sub-agent capability nodes, pays each one per-call via Circle's **x402**
 micropayment protocol, and streams the whole run — narration + settlements —
 to the browser over Server-Sent Events.
 
+This repo is more than the demo app — it's three independently useful
+pieces built on Circle's real `@circle-fin/x402-batching` SDK:
+
+| | What it is | Status |
+|---|---|---|
+| [`packages/sdk`](./packages/sdk) | `@arcrelay/sdk` — one-line Express middleware (`x402Middleware`) to paywall any route, and `ArcRelayClient` for agents to pay for resources with spend-limit guardrails | Built, tested (3/3 passing against a real Express server) |
+| [`contracts`](./contracts) | `ArcRelaySettlementRegistry.sol` — an EIP-712 on-chain settlement audit trail, independent of Circle Gateway's own settlement | Compiled + tested (5/5 passing on a local EVM); **not deployed anywhere yet** — see the package README to deploy it yourself |
+| [`examples/agent-adapters`](./examples/agent-adapters) | LangChain tool + ElizaOS action letting an agent autonomously pay for its own infrastructure via `@arcrelay/sdk` | Built, both verified against a real `x402Middleware`-protected route |
+
+Each has its own README with exact commands and honest status notes — see
+those before citing anything from this repo in a grant application, in
+particular the contracts package's deployment status.
+
 ## Getting started in a Codespace
 
 This repo is set up to run in **GitHub Codespaces** with zero manual steps:
@@ -110,6 +123,12 @@ network access to a font CDN.
   x402 payload signing (mock + live paths).
 - `lib/agent-types.ts` — shared types for log entries, execution stages, and
   agent archetypes used by both the API route and the UI components.
+- `packages/sdk/` — `@arcrelay/sdk`, the standalone middleware/client
+  package (see its own README).
+- `contracts/` — `ArcRelaySettlementRegistry.sol` and its Hardhat project
+  (see its own README).
+- `examples/agent-adapters/` — LangChain and ElizaOS integrations built on
+  `@arcrelay/sdk` (each with its own README).
 
 ## References
 

@@ -1,0 +1,26 @@
+{
+  "name": "@arcrelay/elizaos-plugin",
+  "version": "0.1.0",
+  "description": "ElizaOS plugin letting an agent autonomously pay for x402-protected resources via @arcrelay/sdk.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "example": "tsx src/example.ts"
+  },
+  "dependencies": {
+    "@arcrelay/sdk": "file:../../../packages/sdk"
+  },
+  "peerDependencies": {
+    "@elizaos/core": "^2.0.0-beta"
+  },
+  "devDependencies": {
+    "@elizaos/core": "2.0.11-beta.7",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.5.0",
+    "express": "^4.21.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.0"
+  }
+}

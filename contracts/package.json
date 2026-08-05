@@ -1,0 +1,25 @@
+{
+  "name": "@arcrelay/contracts",
+  "version": "0.1.0",
+  "description": "ArcRelaySettlementRegistry — on-chain EIP-712 settlement audit trail for ArcRelay x402 nanopayments on Arc L1.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "compile:sandbox": "cross-env NODE_OPTIONS=\"--require ./scripts/force-wasm-solc.cjs\" hardhat compile",
+    "test:sandbox": "cross-env NODE_OPTIONS=\"--require ./scripts/force-wasm-solc.cjs\" hardhat test",
+    "deploy:arc-testnet": "hardhat run scripts/deploy.ts --network arcTestnet",
+    "verify:arc-testnet": "hardhat verify --network arcTestnet"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "^5.1.0",
+    "cross-env": "^7.0.3",
+    "hardhat": "^2.22.15",
+    "solc": "^0.8.24",
+    "typescript": "^5.5.0",
+    "ts-node": "^10.9.2",
+    "dotenv": "^16.4.5"
+  }
+}
