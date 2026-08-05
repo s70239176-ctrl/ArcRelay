@@ -8,6 +8,16 @@
  * to verify/settle a real payment needs network access + a funded key this
  * test environment doesn't have — that path is covered by the deploy
  * README's manual walkthrough, not by this offline test.
+ *
+ * Wire format note: as of `@circle-fin/x402-batching@3.3.0`, the protocol
+ * moved to x402 v2 — the payment-required payload travels base64-encoded in
+ * a `PAYMENT-REQUIRED` response header rather than the JSON body (the body
+ * is now deliberately `{}`). This test decodes that header. `x402Middleware`
+ * and `ArcRelayClient` themselves never assumed anything about this wire
+ * shape — they delegate entirely to Circle's `gateway.require()`/
+ * `client.pay()`, which handle both sides of whatever protocol version is
+ * installed — so only this test needed updating for the v1→v2 change, not
+ * any SDK source.
  */
 
 import { test } from "node:test";
@@ -49,14 +59,9 @@ test("x402Middleware returns a genuine HTTP 402 with x402 payment requirements",
   const { server, port } = await listen(app);
   try {
     const res = await fetch(`http://127.0.0.1:${port}/premium`);
-    const body = (await res.json()) as {
-      x402Version?: number;
-      accepts?: unknown[];
-      error?: string;
-      message?: string;
-    };
+    const bodyText = await res.text();
 
-    if (res.status === 500 && /not in allowlist|ENOTFOUND|EAI_AGAIN|fetch failed/i.test(body.message ?? "")) {
+    if (res.status === 500 && /not in allowlist|ENOTFOUND|EAI_AGAIN|fetch failed/i.test(bodyText)) {
       // Expected in network-sandboxed CI/dev environments (e.g. this
       // package built in an environment without egress to
       // gateway-api-testnet.circle.com). Confirms the middleware is
@@ -68,8 +73,18 @@ test("x402Middleware returns a genuine HTTP 402 with x402 payment requirements",
     }
 
     assert.equal(res.status, 402);
-    assert.equal(body.x402Version, 1);
-    assert.ok(Array.isArray(body.accepts) && body.accepts.length > 0);
+
+    const encodedHeader = res.headers.get("payment-required");
+    assert.ok(encodedHeader, "expected a PAYMENT-REQUIRED response header");
+
+    const paymentRequired = JSON.parse(Buffer.from(encodedHeader!, "base64").toString("utf-8")) as {
+      x402Version: number;
+      resource?: { url: string; description: string };
+      accepts: unknown[];
+    };
+
+    assert.equal(paymentRequired.x402Version, 2);
+    assert.ok(Array.isArray(paymentRequired.accepts) && paymentRequired.accepts.length > 0);
   } finally {
     server.close();
   }

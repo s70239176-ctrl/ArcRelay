@@ -87,6 +87,17 @@ develop without spending real testnet USDC:
   (see this package's own `test/middleware.test.ts` for a pattern that
   asserts on the 402 challenge shape without requiring a settled payment).
 
+## Protocol version note
+
+`@circle-fin/x402-batching@3.3.0`+ speaks x402 protocol v2: the
+payment-required payload travels base64-encoded in a `PAYMENT-REQUIRED`
+response header rather than the JSON body (the body itself is now
+deliberately `{}`). `x402Middleware`/`ArcRelayClient` are unaffected by
+this — they delegate entirely to Circle's own `gateway.require()`/
+`client.pay()`, which handle both sides of the wire protocol internally.
+Only code that manually inspects a raw 402 response (like this package's
+own test) needs to know about the header-based v2 shape.
+
 ## License
 
 MIT
