@@ -13,8 +13,10 @@ having to trust ArcRelay's backend to have logged it honestly.
   replay rejection, wrong-signer rejection, expiry rejection, multi-payer
   totals) passes against Hardhat's local EVM with the actual compiled
   bytecode.
-- ⬜ **Not deployed anywhere yet.** Deploying requires a funded testnet key
-  and outbound network access to Arc's RPC — see below to do it yourself.
+- ✅ **Deployed and verified on Arc L1 testnet:**
+  - Address: [`0x9289A359b8528D407Bd69d49d43EB1d5a76ACE8a`](https://testnet.arcscan.app/address/0x9289A359b8528D407Bd69d49d43EB1d5a76ACE8a#code)
+  - Deployment tx: `0xd70188b35651405b60147e335c9451b2587d55013f22e2590bb8919b2813f781`
+  - Source verified on Arcscan — the `#code` link above shows the real Solidity source matched against the deployed bytecode.
 
 ## Compile & test
 
@@ -61,15 +63,12 @@ npm test
    npm run verify:arc-testnet -- <deployed-address>
    ```
    Arc's testnet explorer exposes an Etherscan-compatible verification API;
-   `hardhat.config.ts` is pre-wired for it via `customChains`. If
-   verification fails, double check `ARCSCAN_API_URL`/`ARCSCAN_API_KEY`
-   against whatever Arcscan currently documents — that endpoint shape
-   wasn't something I could confirm from this environment (no network
-   access to arcscan.app here), so treat it as a starting point, not a
-   guarantee.
+   `hardhat.config.ts` is pre-wired for it via `customChains`. This is
+   confirmed working — see the reference deployment above.
 
-Once deployed, drop the real address + explorer link into the main repo
-README's grant-facing summary — don't leave a placeholder there.
+The reference deployment above was produced exactly this way; redeploying
+gives you your own independent instance at a different address (the
+contract has no constructor args, so any deployer can run one).
 
 ## Contract overview
 
