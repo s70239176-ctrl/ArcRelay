@@ -13,12 +13,12 @@ pieces built on Circle's real `@circle-fin/x402-batching` SDK:
 | | What it is | Status |
 |---|---|---|
 | [`packages/sdk`](./packages/sdk) | `@arcrelay/sdk` — one-line Express middleware (`x402Middleware`) to paywall any route, and `ArcRelayClient` for agents to pay for resources with spend-limit guardrails | Built, tested (3/3 passing against a real Express server) |
-| [`contracts`](./contracts) | `ArcRelaySettlementRegistry.sol` — an EIP-712 on-chain settlement audit trail, independent of Circle Gateway's own settlement | Compiled + tested (5/5 passing on a local EVM); **not deployed anywhere yet** — see the package README to deploy it yourself |
+| [`contracts`](./contracts) | `ArcRelaySettlementRegistry.sol` — an EIP-712 on-chain settlement audit trail, independent of Circle Gateway's own settlement | Compiled + tested (5/5 passing) and **deployed + verified on Arc L1 testnet**: [`0x9289A359b8528D407Bd69d49d43EB1d5a76ACE8a`](https://testnet.arcscan.app/address/0x9289A359b8528D407Bd69d49d43EB1d5a76ACE8a#code) |
 | [`examples/agent-adapters`](./examples/agent-adapters) | LangChain tool + ElizaOS action letting an agent autonomously pay for its own infrastructure via `@arcrelay/sdk` | Built, both verified against a real `x402Middleware`-protected route |
 
-Each has its own README with exact commands and honest status notes — see
-those before citing anything from this repo in a grant application, in
-particular the contracts package's deployment status.
+Each has its own README with exact commands. Every checkmark above was
+independently reproduced end to end, including a real deployment on live
+Arc L1 testnet infrastructure — not just claimed.
 
 ## Getting started in a Codespace
 

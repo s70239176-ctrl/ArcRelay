@@ -74,6 +74,15 @@ for LangChain and ElizaOS integrations built on `ArcRelayClient` — an agent
 can call `x402_pay` as a tool/action to autonomously pay for whatever
 external API or sub-agent capability it needs mid-run.
 
+## Testing with real testnet USDC
+
+See [`scripts/`](./scripts) for runnable, no-mock scripts that check your
+wallet balance, deposit into the Gateway Wallet, and execute a real payment
+against a real `x402Middleware` route — then poll the seller's actual
+on-chain balance to prove settlement happened. This is the fastest way to
+confirm the whole pipeline works with real (testnet) money, the same way it
+would on mainnet.
+
 ## Testing without live funds
 
 `x402Middleware` and `ArcRelayClient` always talk to Circle's real
