@@ -22,6 +22,16 @@ import type { LogEntry, NetworkTelemetry, SessionMetrics } from "@/lib/agent-typ
 
 const CHAINS = ["Ethereum", "Arbitrum", "Solana"] as const;
 
+const SETTLEMENT_REGISTRY_ADDRESS = "0x9289A359b8528D407Bd69d49d43EB1d5a76ACE8a";
+const SETTLEMENT_REGISTRY_EXPLORER_URL = `https://testnet.arcscan.app/address/${SETTLEMENT_REGISTRY_ADDRESS}#code`;
+
+interface WalletInfo {
+  mode: "live" | "mock";
+  address: string;
+  walletUsdc: number;
+  gatewayAvailable: number;
+}
+
 export default function ArcRelayDashboard() {
   const [network] = useState<NetworkTelemetry["network"]>("Arc Testnet");
   const [blockHeight, setBlockHeight] = useState(4_812_003);
@@ -35,6 +45,8 @@ export default function ArcRelayDashboard() {
     sessionSpentUsdc: 0,
     delegatedSigningActive: true,
   });
+
+  const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -54,6 +66,38 @@ export default function ArcRelayDashboard() {
     };
   }, []);
 
+  // Fetch the real wallet + Gateway balance breakdown (live mode: genuine
+  // on-chain/Gateway state; mock mode: the same self-consistent simulation
+  // used everywhere else in this app) — replaces purely client-simulated
+  // numbers with ground truth from `lib/circle-agent-wallet.ts`.
+  const fetchWalletInfo = async () => {
+    try {
+      const res = await fetch("/api/agent/wallet");
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        mode: "live" | "mock";
+        address: string;
+        wallet: { usdc: number };
+        gateway: { available: number };
+      };
+      setWalletInfo({
+        mode: data.mode,
+        address: data.address,
+        walletUsdc: data.wallet.usdc,
+        gatewayAvailable: data.gateway.available,
+      });
+      setSession((s) => ({ ...s, usdcGasBalance: data.gateway.available }));
+    } catch {
+      // Non-fatal — the header falls back to simulated figures.
+    }
+  };
+
+  useEffect(() => {
+    fetchWalletInfo();
+    const interval = window.setInterval(fetchWalletInfo, 20_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const handleLog = (entry: LogEntry) => setLogs((prev) => [...prev, entry]);
 
   const handlePayment = (p: { amountUsdc: number }) => {
@@ -62,6 +106,9 @@ export default function ArcRelayDashboard() {
       usdcGasBalance: Math.max(s.usdcGasBalance - p.amountUsdc, 0),
       gatewayPoolBalance: s.gatewayPoolBalance - p.amountUsdc,
     }));
+    // In live mode this catches up to the real (slightly delayed) Gateway
+    // API state; in mock mode it's a no-op fallback re-fetch.
+    fetchWalletInfo();
   };
 
   const handleSummary = (s: { sessionSpend: number; remainingBalance: number }) => {
@@ -81,6 +128,7 @@ export default function ArcRelayDashboard() {
         gatewayLiquidity={gatewayLiquidity}
         relayerNodes={relayerNodes}
         session={session}
+        walletInfo={walletInfo}
         onToggleSigning={() =>
           setSession((s) => ({ ...s, delegatedSigningActive: !s.delegatedSigningActive }))
         }
@@ -202,6 +250,7 @@ function TopNav({
   gatewayLiquidity,
   relayerNodes,
   session,
+  walletInfo,
   onToggleSigning,
 }: {
   network: NetworkTelemetry["network"];
@@ -210,6 +259,7 @@ function TopNav({
   gatewayLiquidity: number;
   relayerNodes: { active: number; total: number };
   session: SessionMetrics;
+  walletInfo: WalletInfo | null;
   onToggleSigning: () => void;
 }) {
   return (
@@ -226,6 +276,20 @@ function TopNav({
           <span className="h-1.5 w-1.5 rounded-full bg-success" />
           {network}
         </span>
+
+        {walletInfo && (
+          <span
+            className={cn(
+              "hidden shrink-0 items-center gap-1.5 rounded-pill px-3 py-1 font-mono text-[11px] font-medium sm:inline-flex",
+              walletInfo.mode === "live"
+                ? "bg-accent-teal/10 text-accent-teal"
+                : "bg-surface-card text-muted"
+            )}
+            title={walletInfo.address}
+          >
+            {walletInfo.mode === "live" ? "Live wallet" : "Mock wallet"}
+          </span>
+        )}
 
         <div className="hidden shrink-0 items-center gap-1 font-mono text-[11px] text-muted sm:flex">
           <span>Block</span>
@@ -254,12 +318,20 @@ function TopNav({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-3">
-          <div className="hidden sm:block text-right font-mono text-[11px]">
-            <div className="uppercase tracking-caption text-muted-soft text-[10px]">Gas Balance</div>
+          <div className="hidden sm:block text-right font-mono text-[11px]" title="Spendable via x402 right now (Gateway available balance)">
+            <div className="uppercase tracking-caption text-muted-soft text-[10px]">Gateway Available</div>
             <div className="text-body-strong" style={{ fontVariantNumeric: "tabular-nums" }}>
               ${session.usdcGasBalance.toFixed(4)}
             </div>
           </div>
+          {walletInfo && (
+            <div className="hidden xl:block text-right font-mono text-[11px]" title="Plain wallet USDC balance, not yet deposited into the Gateway Wallet">
+              <div className="uppercase tracking-caption text-muted-soft text-[10px]">Wallet USDC</div>
+              <div className="text-muted" style={{ fontVariantNumeric: "tabular-nums" }}>
+                ${walletInfo.walletUsdc.toFixed(4)}
+              </div>
+            </div>
+          )}
           <div className="hidden md:block text-right font-mono text-[11px]">
             <div className="uppercase tracking-caption text-muted-soft text-[10px]">Session Spent</div>
             <div className="text-primary" style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -361,6 +433,15 @@ function BridgePanel({
         Burns {amount || "0"} USDC on {bridgeFrom} and mints natively on Arc L1 via Circle&apos;s
         CCTP relayer network — no wrapped assets, no third-party bridge risk.
       </p>
+
+      <a
+        href={SETTLEMENT_REGISTRY_EXPLORER_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 flex items-center gap-1.5 font-mono text-[12px] text-accent-teal hover:underline"
+      >
+        On-chain settlement audit trail: ArcRelaySettlementRegistry (verified) ↗
+      </a>
     </div>
   );
 }
