@@ -41,6 +41,24 @@ export interface UsdcBalance {
   fetchedAt: string;
 }
 
+export interface DetailedBalances {
+  address: string;
+  chain: "ARC-TESTNET";
+  mode: "live" | "mock";
+  wallet: { usdc: number; formatted: string };
+  gateway: {
+    total: number;
+    available: number;
+    withdrawing: number;
+    withdrawable: number;
+    formattedTotal: string;
+    formattedAvailable: string;
+    formattedWithdrawing: string;
+    formattedWithdrawable: string;
+  };
+  fetchedAt: string;
+}
+
 export interface PayResourceResult {
   data: unknown;
   amountUsdc: number;
@@ -141,6 +159,67 @@ export async function getUsdcBalance(
     chain: "ARC-TESTNET",
     usdc: Number(formatted),
     formatted: Number(formatted).toFixed(4),
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Reads the full wallet-vs-Gateway balance breakdown: plain wallet USDC,
+ * plus Gateway `total`/`available`/`withdrawing`/`withdrawable`. This is
+ * the distinction real testing surfaced matters: a successful `pay()` call
+ * debits `gateway.available` immediately, but the on-chain transfer to the
+ * seller follows on Circle's own batch settlement cadence, separately.
+ */
+export async function getDetailedBalances(
+  wallet: AgentWallet,
+  opts: { sessionSpend?: number } = {}
+): Promise<DetailedBalances> {
+  if (wallet.mode === "mock") {
+    const base = 14.2204;
+    const spend = opts.sessionSpend ?? 0;
+    const walletUsdc = Math.max(base - spend, 0);
+    // Mirrors the shape of a real deposited-and-partially-spent Gateway
+    // balance, so the UI has something representative to render in mock
+    // mode too, without pretending funds have actually moved anywhere.
+    const gatewayTotal = 1.0;
+    const gatewayAvailable = Math.max(gatewayTotal - spend, 0);
+    return {
+      address: wallet.address,
+      chain: "ARC-TESTNET",
+      mode: "mock",
+      wallet: { usdc: walletUsdc, formatted: walletUsdc.toFixed(4) },
+      gateway: {
+        total: gatewayTotal,
+        available: gatewayAvailable,
+        withdrawing: 0,
+        withdrawable: 0,
+        formattedTotal: gatewayTotal.toFixed(4),
+        formattedAvailable: gatewayAvailable.toFixed(4),
+        formattedWithdrawing: "0.0000",
+        formattedWithdrawable: "0.0000",
+      },
+      fetchedAt: new Date().toISOString(),
+    };
+  }
+
+  const client = getGatewayClient();
+  const balances = await client.getBalances();
+
+  return {
+    address: wallet.address,
+    chain: "ARC-TESTNET",
+    mode: "live",
+    wallet: { usdc: Number(balances.wallet.formatted), formatted: balances.wallet.formatted },
+    gateway: {
+      total: Number(balances.gateway.formattedTotal),
+      available: Number(balances.gateway.formattedAvailable),
+      withdrawing: Number(balances.gateway.formattedWithdrawing),
+      withdrawable: Number(balances.gateway.formattedWithdrawable),
+      formattedTotal: balances.gateway.formattedTotal,
+      formattedAvailable: balances.gateway.formattedAvailable,
+      formattedWithdrawing: balances.gateway.formattedWithdrawing,
+      formattedWithdrawable: balances.gateway.formattedWithdrawable,
+    },
     fetchedAt: new Date().toISOString(),
   };
 }

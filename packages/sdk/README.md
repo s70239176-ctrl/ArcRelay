@@ -83,6 +83,25 @@ on-chain balance to prove settlement happened. This is the fastest way to
 confirm the whole pipeline works with real (testnet) money, the same way it
 would on mainnet.
 
+**This has been run for real**, with real testnet USDC:
+
+1. Faucet-funded a wallet: `19.982164` USDC.
+2. `deposit.ts 1.00` → moved `1.00` USDC into the Gateway Wallet on-chain.
+3. `pay-demo.ts 0.01` → completed a genuine x402 v2 handshake (402
+   challenge → EIP-712 signature → Gateway verification) against a real
+   `x402Middleware` route, and Circle Gateway accepted it — confirmed via
+   `check-balances-detailed.ts`, whose `gateway.available` balance dropped
+   from `1.00` to exactly `0.99`.
+
+The `pay()` call returns a Gateway-internal transfer ID (a UUID, e.g.
+`e820aa1a-d8b4-41e4-a7c1-9c16877a787a`), *not* an on-chain transaction hash
+— Gateway settlement is batched, so the actual on-chain transfer to the
+seller executes on Circle's own batch cadence, separate from when the
+payment itself is accepted and debited. Don't cite that UUID as a "tx
+hash" — the debited `available` balance is the correct, immediate proof of
+a successful payment; the on-chain batch transaction is proof of
+settlement and follows on its own schedule.
+
 ## Testing without live funds
 
 `x402Middleware` and `ArcRelayClient` always talk to Circle's real
