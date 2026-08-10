@@ -71,7 +71,7 @@ export interface PayResourceResult {
 // Config / mode detection
 // ---------------------------------------------------------------------------
 
-const PRIVATE_KEY = process.env.ARCRELAY_PRIVATE_KEY as Hex | undefined;
+const PRIVATE_KEY = process.env.ARCRELAY_PRIVATE_KEY?.trim() as Hex | undefined;
 const FORCE_MOCK = process.env.ARCRELAY_FORCE_MOCK === "1";
 const ARC_CHAIN: SupportedChainName = "arcTestnet";
 

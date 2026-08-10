@@ -97,9 +97,26 @@ export async function POST(
     return NextResponse.json({ error: `Unknown capability node: "${nodeId}"` }, { status: 404 });
   }
 
-  return WALLET_MODE === "live"
-    ? handleLive(req, nodeId, node)
-    : handleMock(req, nodeId, node);
+  try {
+    return WALLET_MODE === "live"
+      ? await handleLive(req, nodeId, node)
+      : await handleMock(req, nodeId, node);
+  } catch (err) {
+    // Without this, an uncaught exception here (e.g. the Gateway
+    // resource server failing to initialize/reach Circle's API) surfaces
+    // to the client as an opaque empty-body HTTP 500 — nothing to debug
+    // from. Logging + a real error body makes the actual failure visible
+    // in both `vercel logs`/the dashboard and the response itself.
+    console.error(`[mock-nodes/${nodeId}] unhandled error:`, err);
+    return NextResponse.json(
+      {
+        error: "Internal error processing payment request.",
+        message: err instanceof Error ? err.message : String(err),
+        mode: WALLET_MODE,
+      },
+      { status: 500 }
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
