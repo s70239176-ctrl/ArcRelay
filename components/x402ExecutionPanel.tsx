@@ -3,12 +3,12 @@
 /**
  * components/x402ExecutionPanel.tsx
  *
- * The Agent Execution Console, restyled as a cream `feature-card`. The
- * archetype picker uses the `category-tab` pattern (transparent → muted
- * text, active → surface-cream-strong background), the prompt field is a
- * `text-input`, and "Execute Agent" is the panel's one `button-primary` —
- * coral is spent here and nowhere else in the console, per DESIGN.md's
- * "coral is scarce on individual elements" rule.
+ * The Agent Execution Console. The 5-stage x402 flow is rendered as a
+ * circuit rail — nodes connected by a line, with a pulse animation
+ * traveling along the active segment — rather than a plain vertical
+ * checklist, since the subject (payment routing through a settlement
+ * network) is literally about something moving through a circuit. Gold
+ * is spent on exactly one control here: "Execute Agent."
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -29,6 +29,16 @@ interface SettlementToast {
   txHash: string;
 }
 
+interface PaymentPayload {
+  nodeId: string;
+  label: string;
+  capability: string;
+  amountUsdc: number;
+  chain: string;
+  txHash: string;
+  latencyMs: number;
+}
+
 export default function X402ExecutionPanel({
   onLog,
   onPayment,
@@ -36,7 +46,7 @@ export default function X402ExecutionPanel({
   className,
 }: {
   onLog: (entry: LogEntry) => void;
-  onPayment: (p: { amountUsdc: number; txHash: string; nodeId: string }) => void;
+  onPayment: (p: PaymentPayload) => void;
   onSummary: (s: { sessionSpend: number; remainingBalance: number }) => void;
   className?: string;
 }) {
@@ -46,7 +56,6 @@ export default function X402ExecutionPanel({
   const [isRunning, setIsRunning] = useState(false);
   const [activeNode, setActiveNode] = useState<string | null>(null);
   const [activeStage, setActiveStage] = useState<ExecutionStage | null>(null);
-  const [completedNodes, setCompletedNodes] = useState<string[]>([]);
   const [toasts, setToasts] = useState<SettlementToast[]>([]);
   const [runError, setRunError] = useState<string | null>(null);
 
@@ -69,7 +78,6 @@ export default function X402ExecutionPanel({
 
     setIsRunning(true);
     setRunError(null);
-    setCompletedNodes([]);
     setActiveStage(null);
     setActiveNode(null);
 
@@ -111,17 +119,10 @@ export default function X402ExecutionPanel({
             const parsed = JSON.parse(rawData) as { stage: ExecutionStage; nodeId: string };
             setActiveNode(parsed.nodeId);
             setActiveStage(parsed.stage);
-            if (parsed.stage === "delivered") {
-              setCompletedNodes((prev) => [...prev, parsed.nodeId]);
-            }
           } else if (eventType === "log") {
             onLog(JSON.parse(rawData) as LogEntry);
           } else if (eventType === "payment") {
-            const parsed = JSON.parse(rawData) as {
-              nodeId: string;
-              amountUsdc: number;
-              txHash: string;
-            };
+            const parsed = JSON.parse(rawData) as PaymentPayload & { type: string };
             onPayment(parsed);
             pushToast({
               id: `${parsed.nodeId}-${Date.now()}`,
@@ -129,10 +130,7 @@ export default function X402ExecutionPanel({
               txHash: parsed.txHash,
             });
           } else if (eventType === "summary") {
-            const parsed = JSON.parse(rawData) as {
-              sessionSpend: number;
-              remainingBalance: number;
-            };
+            const parsed = JSON.parse(rawData) as { sessionSpend: number; remainingBalance: number };
             onSummary(parsed);
           }
         }
@@ -150,8 +148,8 @@ export default function X402ExecutionPanel({
   }, [isRunning, prompt, spendLimit, onLog, onPayment, onSummary, pushToast]);
 
   return (
-    <div className={cn("relative rounded-lg bg-surface-card p-4 sm:p-5", className)}>
-      {/* Settlement toasts — cream card, success accent, no coral (reserved for the CTA) */}
+    <div className={cn("relative rounded-lg border border-hairline bg-surface p-4 sm:p-5", className)}>
+      {/* Settlement toasts */}
       <div className="pointer-events-none absolute right-3 top-3 z-20 flex flex-col gap-2">
         <AnimatePresence>
           {toasts.map((t) => (
@@ -161,11 +159,11 @@ export default function X402ExecutionPanel({
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
-              className="pointer-events-auto flex items-center gap-2 rounded-md border border-hairline bg-canvas px-3 py-2 shadow-[0_1px_3px_rgba(20,20,19,0.12)]"
+              className="pointer-events-auto flex items-center gap-2 rounded-md border border-hairline-strong bg-surface-elevated px-3 py-2 shadow-[0_4px_16px_rgba(0,0,0,0.4)]"
             >
               <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
               <div className="font-mono text-[11px] leading-tight">
-                <div className="text-body-strong">Settled ${t.amountUsdc.toFixed(4)} USDC</div>
+                <div className="tabular text-ink">Settled ${t.amountUsdc.toFixed(4)} USDC</div>
                 <div className="text-muted">
                   {t.txHash.slice(0, 8)}...{t.txHash.slice(-6)}
                 </div>
@@ -175,15 +173,13 @@ export default function X402ExecutionPanel({
         </AnimatePresence>
       </div>
 
-      <div className="mb-3 flex items-center gap-2">
-        <Sliders className="h-4 w-4 text-primary" />
-        <h2 className="font-display text-lg font-normal tracking-display-sm text-ink">
-          x402 Execution Panel
-        </h2>
+      <div className="mb-4 flex items-center gap-2">
+        <Sliders className="h-4 w-4 text-gold" />
+        <h2 className="font-mono text-base font-semibold text-ink">x402 Execution Panel</h2>
       </div>
 
-      {/* Archetype selector — category-tab pattern */}
-      <label className="mb-1.5 block text-[11px] font-sans font-medium uppercase tracking-caption text-muted">
+      {/* Archetype selector */}
+      <label className="mb-1.5 block text-[11px] font-sans font-medium uppercase tracking-wide text-muted">
         Agent Archetype
       </label>
       <div className="mb-3 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
@@ -193,10 +189,10 @@ export default function X402ExecutionPanel({
             onClick={() => handleArchetypeChange(key)}
             disabled={isRunning}
             className={cn(
-              "min-h-[44px] rounded-md px-2.5 py-1.5 text-left text-[12px] font-sans font-medium transition-colors disabled:opacity-40",
+              "min-h-[44px] rounded-md border px-2.5 py-1.5 text-left text-[12px] font-sans font-medium transition-colors disabled:opacity-40",
               archetype === key
-                ? "bg-surface-cream-strong text-ink"
-                : "text-muted hover:text-body-strong"
+                ? "border-gold/30 bg-gold-dim text-ink"
+                : "border-hairline text-muted hover:border-hairline-strong hover:text-body"
             )}
           >
             {AGENT_ARCHETYPES[key].label}
@@ -204,22 +200,20 @@ export default function X402ExecutionPanel({
         ))}
       </div>
 
-      {/* Prompt — text-input */}
+      {/* Prompt */}
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         rows={2}
         disabled={isRunning}
-        className="mb-3 w-full resize-none rounded-md border border-hairline bg-canvas p-3 font-mono text-[13px] text-ink placeholder:text-muted-soft focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/50 disabled:opacity-60"
+        className="mb-3 w-full resize-none rounded-md border border-hairline bg-surface-sunken p-3 font-mono text-[13px] text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-gold/25 focus:border-gold/50 disabled:opacity-60"
       />
 
       {/* Spend limit slider */}
       <div className="mb-4">
         <div className="mb-1.5 flex items-center justify-between text-[11px] font-sans">
-          <span className="font-medium uppercase tracking-caption text-muted">
-            Per-Call Spend Limit
-          </span>
-          <span className="font-mono text-primary">${spendLimit.toFixed(4)} USDC</span>
+          <span className="font-medium uppercase tracking-wide text-muted">Per-Call Spend Limit</span>
+          <span className="font-mono tabular text-gold">${spendLimit.toFixed(4)} USDC</span>
         </div>
         <input
           type="range"
@@ -229,62 +223,16 @@ export default function X402ExecutionPanel({
           value={spendLimit}
           onChange={(e) => setSpendLimit(Number(e.target.value))}
           disabled={isRunning}
-          className="h-2 w-full min-h-[44px] cursor-pointer appearance-none rounded-pill bg-hairline accent-primary disabled:opacity-50"
+          className="h-2 w-full min-h-[44px] cursor-pointer appearance-none rounded-full bg-hairline accent-gold disabled:opacity-50"
         />
-        <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-soft">
+        <div className="mt-1 flex justify-between font-mono text-[10px] text-muted">
           <span>$0.0001</span>
           <span>$1.00</span>
         </div>
       </div>
 
-      {/* Execution workflow visualizer */}
-      <div className="mb-4 space-y-1.5">
-        {EXECUTION_STAGES.map((stage, idx) => {
-          const isActive = activeStage === stage.key;
-          const stageIdx = EXECUTION_STAGES.findIndex((s) => s.key === activeStage);
-          const isPast = stageIdx > idx;
-
-          return (
-            <div
-              key={stage.key}
-              className={cn(
-                "flex items-center gap-2 rounded-md border px-2.5 py-1.5 transition-colors",
-                isActive ? "border-primary/40 bg-primary/5" : "border-hairline-soft bg-transparent"
-              )}
-            >
-              <span
-                className={cn(
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border font-mono text-[10px]",
-                  isActive
-                    ? "border-primary text-primary"
-                    : isPast
-                    ? "border-success bg-success/10 text-success"
-                    : "border-hairline text-muted-soft"
-                )}
-              >
-                {isActive ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : isPast ? (
-                  <CheckCircle2 className="h-3 w-3" />
-                ) : (
-                  idx + 1
-                )}
-              </span>
-              <span
-                className={cn(
-                  "font-sans text-[12px]",
-                  isActive ? "text-body-strong font-medium" : isPast ? "text-body" : "text-muted-soft"
-                )}
-              >
-                {stage.label}
-              </span>
-              {isActive && activeNode && (
-                <span className="ml-auto font-mono text-[10px] text-muted truncate">{activeNode}</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* Circuit-rail execution visualizer */}
+      <CircuitRail activeStage={activeStage} activeNode={activeNode} />
 
       {runError && (
         <div className="mb-3 flex items-center gap-2 rounded-md border border-error/30 bg-error/10 px-2.5 py-2 text-[12px] font-sans text-error">
@@ -296,7 +244,7 @@ export default function X402ExecutionPanel({
       <button
         onClick={execute}
         disabled={isRunning || !prompt.trim()}
-        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-primary font-sans text-sm font-medium text-on-primary transition-colors hover:bg-primary-active disabled:bg-primary-disabled disabled:text-muted disabled:cursor-not-allowed"
+        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-md bg-gold font-sans text-sm font-semibold text-canvas transition-colors hover:bg-gold/90 disabled:bg-hairline disabled:text-muted disabled:cursor-not-allowed"
       >
         {isRunning ? (
           <>
@@ -308,6 +256,78 @@ export default function X402ExecutionPanel({
           </>
         )}
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Circuit rail — 5 stage nodes connected by a line, with a pulse traveling
+// along the currently-active segment.
+// ---------------------------------------------------------------------------
+
+function CircuitRail({
+  activeStage,
+  activeNode,
+}: {
+  activeStage: ExecutionStage | null;
+  activeNode: string | null;
+}) {
+  const activeIdx = activeStage ? EXECUTION_STAGES.findIndex((s) => s.key === activeStage) : -1;
+
+  return (
+    <div className="mb-4 rounded-md border border-hairline bg-surface-sunken p-3">
+      <div className="relative flex items-center">
+        {EXECUTION_STAGES.map((stage, idx) => {
+          const isActive = idx === activeIdx;
+          const isPast = activeIdx > idx;
+          const isLast = idx === EXECUTION_STAGES.length - 1;
+
+          return (
+            <div key={stage.key} className="flex flex-1 items-center last:flex-none">
+              <div className="group relative flex flex-col items-center">
+                <span
+                  className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] transition-colors",
+                    isActive
+                      ? "border-gold bg-gold text-canvas"
+                      : isPast
+                      ? "border-success/60 bg-success/10 text-success"
+                      : "border-hairline-strong text-muted"
+                  )}
+                >
+                  {isPast ? <CheckCircle2 className="h-3.5 w-3.5" /> : idx + 1}
+                </span>
+                <span
+                  className={cn(
+                    "absolute top-8 w-24 text-center font-mono text-[9px] leading-tight transition-opacity",
+                    isActive ? "text-gold opacity-100" : "text-muted opacity-0 group-hover:opacity-100"
+                  )}
+                >
+                  {stage.label.split(" ").slice(0, 3).join(" ")}
+                </span>
+              </div>
+
+              {!isLast && (
+                <div className="relative mx-1 h-px flex-1 bg-hairline-strong">
+                  {isPast && <div className="absolute inset-0 bg-success/60" />}
+                  {isActive && (
+                    <div className="absolute inset-y-0 left-0 w-2 -translate-y-1/2 top-1/2">
+                      <div className="absolute h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-gold shadow-[0_0_8px_2px_rgba(232,177,74,0.6)] animate-pulse-travel" />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 flex items-center justify-between font-mono text-[11px]">
+        <span className={cn(activeStage ? "text-body" : "text-muted")}>
+          {activeStage ? EXECUTION_STAGES[activeIdx].label : "Idle — awaiting execution"}
+        </span>
+        {activeNode && <span className="text-muted">{activeNode}</span>}
+      </div>
     </div>
   );
 }
