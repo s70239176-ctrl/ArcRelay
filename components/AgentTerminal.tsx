@@ -3,12 +3,11 @@
 /**
  * components/AgentTerminal.tsx
  *
- * The relayer log terminal, styled as DESIGN.md's `code-window-card` — "the
- * signature visual element of Claude Code product pages," here repurposed
- * to show ArcRelay's actual product chrome (x402 challenges, Gateway
- * batches, relayer settlements) rather than an abstract illustration.
- * Dark navy surface, JetBrains Mono throughout, category filters styled as
- * `category-tab` on a dark surface (stays dark — never inverts to light).
+ * The relayer log terminal — a real terminal treatment: sunken surface
+ * (darker than the surrounding panels), the shared `.terminal-texture`
+ * scanline/vignette (see app/globals.css), a live blinking cursor, and
+ * category filters. Status badges use cyan/violet/success/error, keeping
+ * gold reserved for settlement/value elsewhere in the app.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -27,21 +26,17 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "error", label: "Errors" },
 ];
 
-// Coral is reserved for primary CTAs / full-bleed callouts elsewhere in the
-// system, so terminal status badges use the accent-teal / accent-amber /
-// success / error set instead — the palette DESIGN.md calls out for
-// "terminal status indicators."
 const STATUS_STYLES: Record<LogStatus, string> = {
-  "402_CHALLENGE": "bg-accent-amber/15 border-accent-amber/40 text-accent-amber",
+  "402_CHALLENGE": "bg-violet/15 border-violet/40 text-violet",
   "200_OK": "bg-success/15 border-success/40 text-success",
-  RELAY_SUBMITTED: "bg-accent-teal/15 border-accent-teal/40 text-accent-teal",
-  GATEWAY_BATCHED: "bg-accent-teal/10 border-accent-teal/30 text-accent-teal",
+  RELAY_SUBMITTED: "bg-cyan/15 border-cyan/40 text-cyan",
+  GATEWAY_BATCHED: "bg-cyan/10 border-cyan/30 text-cyan",
   ERROR: "bg-error/15 border-error/40 text-error",
 };
 
 const DOT_STYLES: Record<LogCategory, string> = {
-  x402: "bg-accent-amber",
-  gateway: "bg-accent-teal",
+  x402: "bg-violet",
+  gateway: "bg-cyan",
   relayer: "bg-success",
   error: "bg-error",
 };
@@ -82,8 +77,7 @@ export default function AgentTerminal({
       setCopiedId(entry.id);
       setTimeout(() => setCopiedId((id) => (id === entry.id ? null : id)), 1400);
     } catch {
-      // Clipboard API unavailable (e.g. insecure context) — fail silently,
-      // the JSON is still visible and selectable in the inspector.
+      // Clipboard API unavailable — fail silently, JSON is still visible.
     }
   };
 
@@ -96,33 +90,31 @@ export default function AgentTerminal({
   return (
     <div
       className={cn(
-        "dark-scroll flex flex-col overflow-hidden rounded-lg bg-surface-dark",
+        "terminal-texture flex flex-col overflow-hidden rounded-lg border border-hairline bg-surface-sunken",
         className
       )}
     >
-      <div className="flex items-center gap-2 border-b border-surface-dark-elevated px-4 py-3">
-        <ScrollText className="h-4 w-4 text-accent-teal" />
-        <span className="font-sans text-xs font-medium text-on-dark">Relayer Log Terminal</span>
+      <div className="relative z-[2] flex items-center gap-2 border-b border-hairline px-4 py-3">
+        <ScrollText className="h-4 w-4 text-cyan" />
+        <span className="font-mono text-xs font-medium text-ink">Relayer Log Terminal</span>
         <span className="ml-auto flex items-center gap-1.5 text-[11px] font-mono text-success">
           <Radio className="h-3 w-3 animate-pulse" />
           live
         </span>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto scrollbar-none border-b border-surface-dark-elevated px-2.5 py-2">
+      <div className="relative z-[2] flex gap-1 overflow-x-auto scrollbar-none border-b border-hairline px-2.5 py-2">
         {FILTERS.map((f) => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
             className={cn(
               "shrink-0 min-h-[36px] rounded-md px-2.5 text-[11px] font-sans font-medium transition-colors whitespace-nowrap",
-              filter === f.key
-                ? "bg-surface-dark-elevated text-on-dark"
-                : "text-on-dark-soft hover:text-on-dark"
+              filter === f.key ? "bg-surface-elevated text-ink" : "text-muted hover:text-body"
             )}
           >
             {f.label}
-            <span className="ml-1.5 text-on-dark-soft/70">{counts[f.key]}</span>
+            <span className="ml-1.5 text-muted/70">{counts[f.key]}</span>
           </button>
         ))}
       </div>
@@ -130,14 +122,17 @@ export default function AgentTerminal({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-2.5 py-2.5 space-y-1.5 min-h-[240px] max-h-[460px]"
-        style={{ fontVariantNumeric: "tabular-nums" }}
+        className="relative z-[2] flex-1 overflow-y-auto px-2.5 py-2.5 space-y-1.5 min-h-[240px] max-h-[460px]"
       >
         {filtered.length === 0 && (
-          <div className="flex h-full min-h-[200px] items-center justify-center px-4 text-center">
-            <p className="text-xs font-sans text-on-dark-soft">
+          <div className="flex h-full min-h-[200px] flex-col items-center justify-center gap-2 px-4 text-center">
+            <p className="text-xs font-sans text-muted">
               No log entries for this filter yet. Execute an agent to start streaming telemetry.
             </p>
+            <span className="font-mono text-sm text-muted">
+              <span className="text-cyan">$</span> awaiting input
+              <span className="ml-0.5 inline-block h-3.5 w-2 translate-y-0.5 bg-cyan/80 animate-blink" />
+            </span>
           </div>
         )}
 
@@ -150,7 +145,7 @@ export default function AgentTerminal({
                 initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
-                className="rounded-md bg-surface-dark-soft"
+                className="rounded-md bg-surface"
               >
                 <button
                   onClick={() => setExpandedId(isOpen ? null : entry.id)}
@@ -169,15 +164,15 @@ export default function AgentTerminal({
                   >
                     {entry.status}
                   </span>
-                  <span className="shrink-0 font-mono text-[11px] text-on-dark-soft hidden sm:inline">
+                  <span className="shrink-0 font-mono text-[11px] tabular text-muted hidden sm:inline">
                     {new Date(entry.timestamp).toLocaleTimeString(undefined, { hour12: false })}
                   </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-on-dark/90">
-                    <span className="text-on-dark-soft">{entry.nodeLabel}</span> — {entry.message}
+                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-body">
+                    <span className="text-muted">{entry.nodeLabel}</span> — {entry.message}
                   </span>
                   <ChevronDown
                     className={cn(
-                      "h-3.5 w-3.5 shrink-0 text-on-dark-soft transition-transform",
+                      "h-3.5 w-3.5 shrink-0 text-muted transition-transform",
                       isOpen && "rotate-180"
                     )}
                   />
@@ -190,12 +185,12 @@ export default function AgentTerminal({
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.18 }}
-                      className="overflow-hidden border-t border-surface-dark-elevated"
+                      className="overflow-hidden border-t border-hairline"
                     >
                       <div className="relative px-2.5 py-2">
                         <button
                           onClick={() => copyPayload(entry)}
-                          className="absolute right-2 top-2 flex min-h-[32px] min-w-[32px] items-center justify-center rounded-md bg-surface-dark-elevated text-on-dark-soft hover:text-on-dark"
+                          className="absolute right-2 top-2 flex min-h-[32px] min-w-[32px] items-center justify-center rounded-md bg-surface-elevated text-muted hover:text-ink"
                           aria-label="Copy payload to clipboard"
                         >
                           {copiedId === entry.id ? (
@@ -204,7 +199,7 @@ export default function AgentTerminal({
                             <Copy className="h-3.5 w-3.5" />
                           )}
                         </button>
-                        <pre className="max-h-56 overflow-auto rounded bg-black/30 p-2.5 pr-10 font-mono text-[11px] leading-relaxed text-on-dark-soft">
+                        <pre className="max-h-56 overflow-auto rounded bg-surface-sunken p-2.5 pr-10 font-mono text-[11px] leading-relaxed text-muted">
                           {JSON.stringify(entry.payload, null, 2)}
                         </pre>
                       </div>

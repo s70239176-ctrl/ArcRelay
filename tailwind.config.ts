@@ -1,11 +1,11 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Design tokens sourced from DESIGN.md — the warm-canvas editorial system
- * (cream canvas, coral CTA, dark-navy product surfaces, slab-serif display
- * paired with humanist sans). Colors are wired to CSS custom properties in
- * app/globals.css so they read `hsl(var(--...))`-free — plain hex vars are
- * simpler here since the palette is a fixed brand set, not a themeable one.
+ * Design tokens for ArcRelay's visual identity: a dark, cool-toned
+ * instrument-panel palette (not pure black) with a warm gold signature
+ * accent tied directly to the subject — settlement, value, currency —
+ * plus semantic cyan (telemetry) and violet (agent/AI) accents. See
+ * app/globals.css for the underlying CSS custom properties.
  */
 const config: Config = {
   darkMode: "class",
@@ -13,63 +13,65 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: {
-          DEFAULT: "var(--color-primary)",
-          active: "var(--color-primary-active)",
-          disabled: "var(--color-primary-disabled)",
-        },
-        ink: "var(--color-ink)",
-        body: {
-          DEFAULT: "var(--color-body)",
-          strong: "var(--color-body-strong)",
-        },
-        muted: {
-          DEFAULT: "var(--color-muted)",
-          soft: "var(--color-muted-soft)",
+        canvas: "var(--color-canvas)",
+        surface: {
+          DEFAULT: "var(--color-surface)",
+          elevated: "var(--color-surface-elevated)",
+          sunken: "var(--color-surface-sunken)",
         },
         hairline: {
           DEFAULT: "var(--color-hairline)",
-          soft: "var(--color-hairline-soft)",
+          strong: "var(--color-hairline-strong)",
         },
-        canvas: "var(--color-canvas)",
-        "surface-soft": "var(--color-surface-soft)",
-        "surface-card": "var(--color-surface-card)",
-        "surface-cream-strong": "var(--color-surface-cream-strong)",
-        "surface-dark": {
-          DEFAULT: "var(--color-surface-dark)",
-          elevated: "var(--color-surface-dark-elevated)",
-          soft: "var(--color-surface-dark-soft)",
+        ink: "var(--color-ink)",
+        body: "var(--color-body)",
+        muted: "var(--color-muted)",
+        gold: {
+          DEFAULT: "var(--color-gold)",
+          dim: "var(--color-gold-dim)",
         },
-        "on-primary": "var(--color-on-primary)",
-        "on-dark": {
-          DEFAULT: "var(--color-on-dark)",
-          soft: "var(--color-on-dark-soft)",
-        },
-        "accent-teal": "var(--color-accent-teal)",
-        "accent-amber": "var(--color-accent-amber)",
+        cyan: "var(--color-cyan)",
+        violet: "var(--color-violet)",
         success: "var(--color-success)",
-        warning: "var(--color-warning)",
         error: "var(--color-error)",
       },
       fontFamily: {
-        display: ["var(--font-display)"],
-        sans: ["var(--font-sans)"],
         mono: ["var(--font-mono)"],
+        sans: ["var(--font-sans)"],
       },
       borderRadius: {
-        xs: "4px",
-        sm: "6px",
-        md: "8px",
-        lg: "12px",
-        xl: "16px",
-        pill: "9999px",
+        xs: "3px",
+        sm: "5px",
+        md: "7px",
+        lg: "10px",
+        xl: "14px",
       },
-      letterSpacing: {
-        "display-xl": "-1.5px",
-        "display-lg": "-1px",
-        "display-md": "-0.5px",
-        "display-sm": "-0.3px",
-        caption: "1.5px",
+      keyframes: {
+        ticker: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        "tick-flash": {
+          "0%": { boxShadow: "inset 2px 0 0 0 var(--color-gold), 0 0 0 rgba(232,177,74,0)" },
+          "40%": { boxShadow: "inset 2px 0 0 0 var(--color-gold), 0 0 24px rgba(232,177,74,0.15)" },
+          "100%": { boxShadow: "inset 2px 0 0 0 transparent, 0 0 0 rgba(232,177,74,0)" },
+        },
+        "pulse-travel": {
+          "0%": { left: "0%", opacity: "0" },
+          "10%": { opacity: "1" },
+          "90%": { opacity: "1" },
+          "100%": { left: "100%", opacity: "0" },
+        },
+        blink: {
+          "0%, 49%": { opacity: "1" },
+          "50%, 100%": { opacity: "0" },
+        },
+      },
+      animation: {
+        ticker: "ticker 38s linear infinite",
+        "tick-flash": "tick-flash 1.6s ease-out",
+        "pulse-travel": "pulse-travel 1.4s ease-in-out infinite",
+        blink: "blink 1s step-start infinite",
       },
     },
   },

@@ -3,46 +3,30 @@
 @tailwind utilities;
 
 :root {
-  /* --- DESIGN.md color tokens ------------------------------------------ */
-  --color-primary: #cc785c;
-  --color-primary-active: #a9583e;
-  --color-primary-disabled: #e6dfd8;
-  --color-ink: #141413;
-  --color-body: #3d3d3a;
-  --color-body-strong: #252523;
-  --color-muted: #6c6a64;
-  --color-muted-soft: #8e8b82;
-  --color-hairline: #e6dfd8;
-  --color-hairline-soft: #ebe6df;
-  --color-canvas: #faf9f5;
-  --color-surface-soft: #f5f0e8;
-  --color-surface-card: #efe9de;
-  --color-surface-cream-strong: #e8e0d2;
-  --color-surface-dark: #181715;
-  --color-surface-dark-elevated: #252320;
-  --color-surface-dark-soft: #1f1e1b;
-  --color-on-primary: #ffffff;
-  --color-on-dark: #faf9f5;
-  --color-on-dark-soft: #a09d96;
-  --color-accent-teal: #5db8a6;
-  --color-accent-amber: #e8a55a;
-  --color-success: #5db872;
-  --color-warning: #d4a017;
-  --color-error: #c64545;
+  --color-canvas: #0a0b0f;
+  --color-surface: #12141c;
+  --color-surface-elevated: #1a1d28;
+  --color-surface-sunken: #07080b;
+  --color-hairline: #232733;
+  --color-hairline-strong: #2e3341;
+  --color-ink: #f4f3f0;
+  --color-body: #b8bac4;
+  --color-muted: #6e7180;
+  --color-gold: #e8b14a;
+  --color-gold-dim: rgba(232, 177, 74, 0.14);
+  --color-cyan: #4fd8e8;
+  --color-violet: #9c8cff;
+  --color-success: #56d98f;
+  --color-error: #f0616d;
 
-  /* --- Type stacks -------------------------------------------------------
-     Copernicus / StyreneB are licensed Anthropic typefaces and unavailable
-     as web fonts; these are DESIGN.md's own documented open-source
-     substitutes. Declared as local CSS stacks (not next/font/google) so the
-     app builds and renders correctly without a font-CDN fetch — browsers
-     fall back gracefully to system serif/sans if the named faces aren't
-     installed locally. */
-  --font-display: "Cormorant Garamond", "EB Garamond", "Tiempos Headline",
-    Garamond, "Times New Roman", serif;
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo,
-    Consolas, monospace;
+  /* IBM Plex Mono / IBM Plex Sans — designed as a coherent technical
+     family. Declared as local CSS stacks (not next/font/google) so the
+     app builds and renders correctly without a font-CDN fetch; browsers
+     fall back gracefully to the platform's native mono/sans stack if the
+     named faces aren't installed locally. */
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, "SFMono-Regular",
+    Menlo, Consolas, monospace;
+  --font-sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
@@ -51,15 +35,15 @@ body {
   font-family: var(--font-sans);
 }
 
-.font-display {
-  font-family: var(--font-display);
-}
 .font-mono {
   font-family: var(--font-mono);
 }
 
-/* Hide scrollbars on horizontally-scrollable rows (preset badges, nav on
-   small viewports) while keeping the element scrollable. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hide scrollbars on horizontally-scrolling rows while staying scrollable. */
 .scrollbar-none {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -68,24 +52,53 @@ body {
   display: none;
 }
 
-/* Slim scrollbars: warm-hairline on cream surfaces, muted on dark surfaces. */
+/* Slim scrollbars matched to the dark surface everywhere. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-hairline) transparent;
+  scrollbar-color: var(--color-hairline-strong) transparent;
 }
 *::-webkit-scrollbar {
   width: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: var(--color-hairline);
+  background-color: var(--color-hairline-strong);
   border-radius: 9999px;
 }
-.dark-scroll::-webkit-scrollbar-thumb,
-.dark-scroll {
-  scrollbar-color: var(--color-surface-dark-elevated) transparent;
+
+/* Subtle terminal atmosphere: a faint vertical scanline texture and vignette,
+   low enough opacity to read as "instrument surface" rather than pastiche. */
+.terminal-texture {
+  position: relative;
+  isolation: isolate;
 }
-.dark-scroll::-webkit-scrollbar-thumb {
-  background-color: var(--color-surface-dark-elevated);
+.terminal-texture::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.012) 0px,
+    rgba(255, 255, 255, 0.012) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+.terminal-texture::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.35);
+}
+
+/* Visible keyboard focus everywhere, regardless of underlying element. */
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -95,5 +108,6 @@ body {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -84,20 +84,39 @@ payments through Circle Gateway's testnet API
 
 ## Design system
 
-The UI is built to [`DESIGN.md`](./DESIGN.md) — a warm-canvas editorial
-system (cream canvas, coral primary CTA, dark-navy product surfaces,
-slab-serif display type). Tokens are wired as CSS custom properties in
-`app/globals.css` and exposed as Tailwind theme colors/radii in
-`tailwind.config.ts` (`bg-canvas`, `text-primary`, `bg-surface-dark`, etc.).
-The relayer log terminal is treated as the system's `code-window-card` — a
-dark product surface — while the rest of the console stays on the cream
-canvas, with coral reserved for the single "Execute Agent" primary action.
+The current UI is a purpose-built dark instrument-panel design, not a
+reskin of a generic template. The subject — machines paying machines,
+sub-cent settlements, blockchain finality — called for real technical
+authority rather than a warm editorial look (an earlier iteration used a
+cream/coral system from `DESIGN.md`; that file is kept for reference but
+no longer describes the live UI).
 
-Display/body fonts use DESIGN.md's own documented open-source substitutes
-(Cormorant Garamond / EB Garamond for the licensed Copernicus serif, Inter
-for the licensed StyreneB sans) as local CSS stacks rather than a
-`next/font/google` fetch, so the app builds and renders correctly without
-network access to a font CDN.
+- **Palette:** a cool near-black canvas (`#0a0b0f`, not pure black) with a
+  warm gold signature accent (`#e8b14a`) tied directly to the subject —
+  settlement, value, currency — plus semantic cyan (telemetry) and violet
+  (agent/AI). Tokens live in `app/globals.css` as CSS custom properties,
+  exposed as Tailwind colors in `tailwind.config.ts` (`bg-canvas`,
+  `text-gold`, `bg-surface-sunken`, etc.).
+- **Type:** IBM Plex Mono + IBM Plex Sans, a coherent technical family
+  designed together for engineered/financial contexts. Mono plays a
+  starring role — hero numbers, balances, and block heights are set large
+  and tabular, not just relegated to captions. Declared as local CSS
+  stacks rather than a `next/font/google` fetch, so the app builds and
+  renders correctly without network access to a font CDN.
+- **Signature element:** `components/SettlementTicker.tsx` — a live,
+  scrolling ticker of real settlement events beneath the nav, stock-ticker
+  style. This is the hero: the product's actual value (real-time
+  machine-to-machine settlement) shown viscerally in the first second,
+  not described in a headline.
+- **Supporting motifs:** the 5-stage x402 execution flow renders as a
+  circuit rail (`CircuitRail` in `components/x402ExecutionPanel.tsx`) with
+  a pulse traveling along the active segment; settled payments land in a
+  persistent ledger (`components/SettlementLedger.tsx`) with a gold
+  tick-flash on arrival; the relayer log terminal
+  (`components/AgentTerminal.tsx`) gets a subtle scanline/vignette texture
+  (`.terminal-texture` in `app/globals.css`) for real terminal atmosphere.
+  Balances and counters animate via `lib/use-animated-number.ts` so
+  changes read as a continuous ticking ledger rather than discrete jumps.
 
 See [`docs/API.md`](./docs/API.md) for the app's own API routes — request/
 response shapes with real captured examples for both mock and live mode.
@@ -117,6 +136,10 @@ response shapes with real captured examples for both mock and live mode.
   filters (`All` / `x402` / `Gateway` / `Relayer` / `Errors`), color-coded
   status badges, and an expandable JSON payload inspector with
   copy-to-clipboard.
+- `components/SettlementTicker.tsx` — the page's hero: a live scrolling
+  ticker of settled payments beneath the nav.
+- `components/SettlementLedger.tsx` — persistent, ledger-styled list of
+  settled payments with running totals.
 - `app/api/agent/orchestrate/route.ts` — orchestrator SSE route; plans
   capability nodes, drives each x402 handshake, and streams `text`, `step`
   (workflow stage), `log` (structured terminal entries), `payment`, and
