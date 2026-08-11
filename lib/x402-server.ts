@@ -32,7 +32,7 @@ import { ARC_USDC_ADDRESS } from "@/lib/circle-agent-wallet";
 export const ARC_TESTNET_NETWORK = "eip155:5042002" as const;
 
 const GATEWAY_API_TESTNET_URL =
-  process.env.ARCRELAY_GATEWAY_URL ?? "https://gateway-api-testnet.circle.com/v1";
+  process.env.ARCRELAY_GATEWAY_URL ?? "https://gateway-api-testnet.circle.com";
 
 // ---------------------------------------------------------------------------
 // Web Fetch -> @x402/core HTTPAdapter
