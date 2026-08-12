@@ -25,7 +25,8 @@ import { x402ResourceServer } from "@x402/core/server";
 import { x402HTTPResourceServer } from "@x402/core/http";
 import type { HTTPAdapter, HTTPRequestContext, RouteConfig, FacilitatorClient } from "@x402/core/http";
 import { BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
-import { registerExactEvmScheme } from "@x402/evm/exact/server";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { ARC_USDC_ADDRESS } from "@/lib/circle-agent-wallet";
 
 // Arc L1 testnet chain ID (CAIP-2 `eip155:<id>`), per
 // @circle-fin/x402-batching's internal chain config.
@@ -81,15 +82,25 @@ function getResourceServer(): x402ResourceServer {
     // copy of @x402/core's `FacilitatorClient` interface. The runtime shape
     // is compatible; this cast bridges the two packages' duplicate types.
     const server = new x402ResourceServer([facilitator as unknown as FacilitatorClient]);
+
     // Circle's facilitator.getSupported() tells the resource server what
     // Gateway itself can verify/settle, but the resource server separately
     // needs a *locally registered* SchemeNetworkServer to actually build
     // payment requirements (compute atomic amounts from a price string,
-    // resolve asset decimals, etc.) — without this, buildPaymentRequirements
-    // silently produces an empty `accepts` array even for networks the
-    // facilitator genuinely supports, which is what caused the initial
-    // "402 with no payment options" bug this registration call fixes.
-    registerExactEvmScheme(server, { networks: [ARC_TESTNET_NETWORK] });
+    // etc.). ExactEvmScheme's own built-in `defaultMoneyConversion` only
+    // knows a hardcoded list of "well-known" networks' default assets —
+    // Arc testnet isn't in that list, even though Circle's facilitator
+    // genuinely supports it (confirmed via a direct call to
+    // gateway-api-testnet.circle.com/v1/x402/supported). Registering a
+    // custom money parser for Arc testnet's USDC address is what
+    // ExactEvmScheme's own docs prescribe for exactly this situation.
+    const evmScheme = new ExactEvmScheme();
+    evmScheme.registerMoneyParser(async (amount, network) => {
+      if (network !== ARC_TESTNET_NETWORK) return null; // fall through to default handling
+      return { asset: ARC_USDC_ADDRESS, amount: Math.round(amount * 1_000_000).toString() };
+    });
+    server.register(ARC_TESTNET_NETWORK, evmScheme);
+
     globalForX402.__arcrelayResourceServer = server;
   }
   return globalForX402.__arcrelayResourceServer;
