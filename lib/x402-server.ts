@@ -25,7 +25,7 @@ import { x402ResourceServer } from "@x402/core/server";
 import { x402HTTPResourceServer } from "@x402/core/http";
 import type { HTTPAdapter, HTTPRequestContext, RouteConfig, FacilitatorClient } from "@x402/core/http";
 import { BatchFacilitatorClient } from "@circle-fin/x402-batching/server";
-import { ARC_USDC_ADDRESS } from "@/lib/circle-agent-wallet";
+import { registerExactEvmScheme } from "@x402/evm/exact/server";
 
 // Arc L1 testnet chain ID (CAIP-2 `eip155:<id>`), per
 // @circle-fin/x402-batching's internal chain config.
@@ -80,9 +80,17 @@ function getResourceServer(): x402ResourceServer {
     // (but not identical — e.g. `resource.description` optionality differs)
     // copy of @x402/core's `FacilitatorClient` interface. The runtime shape
     // is compatible; this cast bridges the two packages' duplicate types.
-    globalForX402.__arcrelayResourceServer = new x402ResourceServer([
-      facilitator as unknown as FacilitatorClient,
-    ]);
+    const server = new x402ResourceServer([facilitator as unknown as FacilitatorClient]);
+    // Circle's facilitator.getSupported() tells the resource server what
+    // Gateway itself can verify/settle, but the resource server separately
+    // needs a *locally registered* SchemeNetworkServer to actually build
+    // payment requirements (compute atomic amounts from a price string,
+    // resolve asset decimals, etc.) — without this, buildPaymentRequirements
+    // silently produces an empty `accepts` array even for networks the
+    // facilitator genuinely supports, which is what caused the initial
+    // "402 with no payment options" bug this registration call fixes.
+    registerExactEvmScheme(server, { networks: [ARC_TESTNET_NETWORK] });
+    globalForX402.__arcrelayResourceServer = server;
   }
   return globalForX402.__arcrelayResourceServer;
 }
@@ -122,7 +130,6 @@ export async function createGatewayHttpServer(
       network: ARC_TESTNET_NETWORK,
       payTo: params.payTo,
       price: `$${params.priceUsdc.toFixed(4)}`,
-      extra: { asset: ARC_USDC_ADDRESS },
     },
     resource: params.resource,
     description: params.description,
