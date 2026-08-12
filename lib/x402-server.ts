@@ -95,9 +95,30 @@ function getResourceServer(): x402ResourceServer {
     // custom money parser for Arc testnet's USDC address is what
     // ExactEvmScheme's own docs prescribe for exactly this situation.
     const evmScheme = new ExactEvmScheme();
+    // The verifyingContract address below is Circle's GatewayWalletBatched
+    // contract — confirmed via a direct call to
+    // gateway-api-testnet.circle.com/v1/x402/supported, where it appears
+    // identically across every listed network (deployed at the same
+    // address on each chain). `client.supports()` on the buyer side
+    // specifically checks for these three `extra` fields
+    // (name/version/verifyingContract) to recognize a Gateway-batching
+    // payment option — @x402/evm's own `defaultMoneyConversion` only
+    // populates `extra` for its baked-in "well-known" networks, which
+    // doesn't include Arc testnet, so our custom money parser has to
+    // supply the same shape manually.
+    const GATEWAY_WALLET_BATCHED_CONTRACT = "0x0077777d7eba4688bdef3e311b846f25870a19b9";
+
     evmScheme.registerMoneyParser(async (amount, network) => {
       if (network !== ARC_TESTNET_NETWORK) return null; // fall through to default handling
-      return { asset: ARC_USDC_ADDRESS, amount: Math.round(amount * 1_000_000).toString() };
+      return {
+        asset: ARC_USDC_ADDRESS,
+        amount: Math.round(amount * 1_000_000).toString(),
+        extra: {
+          name: "GatewayWalletBatched",
+          version: "1",
+          verifyingContract: GATEWAY_WALLET_BATCHED_CONTRACT,
+        },
+      };
     });
     server.register(ARC_TESTNET_NETWORK, evmScheme);
 
