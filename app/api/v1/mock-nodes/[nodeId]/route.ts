@@ -86,7 +86,7 @@ function mockResultFor(nodeId: string): string {
 // Handler
 // ---------------------------------------------------------------------------
 
-export async function POST(
+async function handleRequest(
   req: NextRequest,
   ctx: { params: Promise<{ nodeId: string }> }
 ) {
@@ -118,6 +118,15 @@ export async function POST(
     );
   }
 }
+
+// GatewayClient.supports() (used by ArcRelayClient/payResource's
+// pre-flight check before attempting a real payment) hardcodes a plain
+// `fetch(url)` — a GET request — with no way to configure the method.
+// Without this GET export, that pre-flight always gets a 405 and
+// `supports()` incorrectly reports "Resource does not require payment
+// (not 402)", regardless of how the actual payment call is made.
+export const GET = handleRequest;
+export const POST = handleRequest;
 
 // ---------------------------------------------------------------------------
 // Live: real x402 + Circle Gateway settlement
